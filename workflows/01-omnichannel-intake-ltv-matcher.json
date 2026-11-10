@@ -1,0 +1,800 @@
+{
+  "name": "ENT-03: 01 - Omnichannel Intake & Customer LTV Matcher",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        16
+      ],
+      "id": "96dfdfcd-58a9-43b2-9f5b-6ba06ad8e526",
+      "name": "Inbound Support Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "7c465b45-4692-40c9-8631-8fb131977aff",
+              "leftValue": "={{ $json.headers['x-lumina-secret-key'] }}",
+              "rightValue": "YOUR_SHARED_SECRET",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        16
+      ],
+      "id": "d40291aa-02ae-4d9f-9848-127fd81f9196",
+      "name": "Validate Secret Token"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"error\": \"Unauthorized\",\n  \"message\": \"Invalid or missing X-Lumina-Secret-Key header. Support request rejected.\"\n}\n",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        448,
+        112
+      ],
+      "id": "1459f297-7de5-4172-b3df-676fa4e41933",
+      "name": "Reject Unauthorized (401)"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "support_fraud_blacklist",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email_or_phone",
+              "keyValue": "={{ $json.customer_email }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -80
+      ],
+      "id": "8c7eb741-4f02-48c1-a2f6-f15dd08ab643",
+      "name": "Check Fraud Blacklist",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "12aff71b-7751-4192-8326-8b5adf582f4d",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        -80
+      ],
+      "id": "ec7cb9db-99d4-499f-bc7b-2fd1a9a908ec",
+      "name": "Is Customer Blacklisted?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"flagged\", \"message\": \"Inquiry routed to risk and compliance team.\"}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        -176
+      ],
+      "id": "862b6168-4864-401d-8009-5ab88c0e9ca0",
+      "name": "Drop Blacklisted Inquiry (200 OK)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "504d7199-ef04-48e2-a2f9-486eeaaf4a4b",
+              "name": "channel",
+              "type": "string",
+              "value": "={{ ($json.body?.channel || $json.channel || 'email').toLowerCase().trim() }}"
+            },
+            {
+              "id": "71fb4529-ea7b-47bf-b795-09efa26d1586",
+              "name": "customer_email",
+              "type": "string",
+              "value": "={{ ($json.body?.customer_email || $json.body?.from || $json.body?.email || $json.customer_email || '').toLowerCase().trim() }}"
+            },
+            {
+              "id": "6fcf4302-7800-48da-b763-499287cffbd9",
+              "name": "order_number",
+              "type": "string",
+              "value": "={{ ($json.body?.order_number || $json.order_number || ($json.body?.message || $json.body?.text || '').match(/LUM-\\\\d{4,6}/i)?.[0] || ($json.body?.subject || '').match(/LUM-\\\\d{4,6}/i)?.[0] || '').toUpperCase().trim() }}"
+            },
+            {
+              "id": "0cc4c72b-ceee-4caf-bbbc-b3f379dfa9da",
+              "name": "raw_message",
+              "type": "string",
+              "value": "={{ ($json.body?.message || $json.body?.text || $json.body?.body_text || $json.message || '').trim() }}"
+            },
+            {
+              "id": "7e0eec5f-f12e-43fe-9a40-6c974916b2c6",
+              "name": "subject",
+              "type": "string",
+              "value": "={{ ($json.body?.subject || $json.subject || 'Support Request').trim() }}"
+            },
+            {
+              "id": "3d7823cf-39cf-4487-b638-bb1a216f228e",
+              "name": "has_attachments",
+              "type": "boolean",
+              "value": "={{ ($json.body?.attachments || $json.attachments || []).length > 0 }}"
+            },
+            {
+              "id": "b11152b0-cd14-45cb-ad2c-598242453a9a",
+              "name": "received_at",
+              "type": "string",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        -80
+      ],
+      "id": "b676763d-ff23-45d9-870f-7adceaa5532e",
+      "name": "Normalize Inbound Payload"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "support_customers",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "email",
+              "keyValue": "={{ $('Normalize Inbound Payload').item.json.customer_email }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        16
+      ],
+      "id": "b332868b-d858-44c6-9df7-feb6950060c9",
+      "name": "Lookup Customer Profile",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "support_orders",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "order_number",
+              "keyValue": "={{ $('Normalize Inbound Payload').item.json.order_number }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        16
+      ],
+      "id": "b317cebb-8d68-4605-bca4-02ac7fea8446",
+      "name": "Lookup Order Details",
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=CUSTOMER INQUIRY:\nChannel: {{ $('Normalize Inbound Payload').item.json.channel }}\nCustomer Email: {{ $('Normalize Inbound Payload').item.json.customer_email }}\nReferenced Order: {{ $('Normalize Inbound Payload').item.json.order_number }}\nSubject: {{ $('Normalize Inbound Payload').item.json.subject }}\nMessage:\n\"{{ $('Normalize Inbound Payload').item.json.raw_message }}\"\n\nDATABASE CONTEXT:\nFulfillment Status: {{ $('Lookup Order Details').item.json.fulfillment_status || 'Unknown' }}\nTotal Order Amount: ${{ $('Lookup Order Details').item.json.total_amount || 0 }}\nCurrent Shipping Address: {{ JSON.stringify($('Lookup Order Details').item.json.shipping_address || {}) }}\nCustomer LTV Tier: {{ $('Lookup Customer Profile').item.json.ltv_tier || 'standard' }} (Total Spend: ${{ $('Lookup Customer Profile').item.json.total_spend || 0 }})\nHas Attachments: {{ $('Normalize Inbound Payload').item.json.has_attachments }}\n",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the Autonomous Customer Resolution & Triage AI for Lumina Goods Co.\nAnalyze incoming customer support inquiries and evaluate them against order and customer database context.\n\nClassify the inquiry into EXACTLY ONE primary intent:\n1. \"ADDRESS_UPDATE\" - The customer wants to fix a shipping address typo, change an apartment/suite number, or update their delivery destination before the order is fulfilled.\n2. \"DAMAGED_ITEM\" - The customer reports a broken, cracked, defective, crushed, or leaking item upon delivery (often with attached photo evidence).\n3. \"ORDER_STATUS\" - The customer is asking where their package is, tracking numbers, carrier delays, or estimated delivery time.\n4. \"REFUND_REQUEST\" - The customer demands money back, order cancellation, or expresses deep dissatisfaction with their purchase.\n5. \"GENERAL_INQUIRY\" - General product questions, usage advice, or store policy inquiries.\n\nExtraction & Evaluation Rules:\n- If the intent is ADDRESS_UPDATE: Extract the exact new address or unit correction provided by the customer (e.g. \"Apt 4B\", \"742 Evergreen Terrace\"). If not specified, return null.\n- Rate customer sentiment: \"satisfied\", \"neutral\", \"frustrated\", or \"hostile\".\n- Rate urgency: \"low\", \"medium\", \"high\", or \"critical\". (Address updates on unfulfilled orders must always be rated \"high\" or \"critical\" due to carrier fulfillment deadlines).\n"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1568,
+        16
+      ],
+      "id": "68f175b6-9eea-47c2-9280-06866c2c9be4",
+      "name": "Classify Intent & Sentiment"
+    },
+    {
+      "parameters": {
+        "model": "openrouter/free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1576,
+        248
+      ],
+      "id": "2b9c3c01-810c-4acc-b1ee-cbc6383e9af1",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "REPLACE_ME",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"intent\": {\n      \"type\": \"string\",\n      \"enum\": [\"ADDRESS_UPDATE\", \"DAMAGED_ITEM\", \"ORDER_STATUS\", \"REFUND_REQUEST\", \"GENERAL_INQUIRY\"]\n    },\n    \"sentiment\": {\n      \"type\": \"string\",\n      \"enum\": [\"satisfied\", \"neutral\", \"frustrated\", \"hostile\"]\n    },\n    \"urgency\": {\n      \"type\": \"string\",\n      \"enum\": [\"low\", \"medium\", \"high\", \"critical\"]\n    },\n    \"extracted_address_correction\": {\n      \"type\": [\"string\", \"null\"],\n      \"description\": \"Corrected street or apartment details provided by customer (e.g. 'Apt 4B'), or null\"\n    },\n    \"reasoning\": {\n      \"type\": \"string\",\n      \"description\": \"Brief explanation for the classification\"\n    }\n  },\n  \"required\": [\"intent\", \"sentiment\", \"urgency\"]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1704,
+        248
+      ],
+      "id": "fdd1dc10-d921-4413-b77c-379eec7102f3",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "tableId": "support_tickets",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "ticket_number",
+              "fieldValue": "={{ 'TCK-' + $now.format('yyyy') + '-' + Math.floor(1000 + Math.random() * 9000) }}"
+            },
+            {
+              "fieldId": "order_id",
+              "fieldValue": "={{ $('Lookup Order Details').item.json.id || null }}"
+            },
+            {
+              "fieldId": "customer_email",
+              "fieldValue": "={{ $('Normalize Inbound Payload').item.json.customer_email }}"
+            },
+            {
+              "fieldId": "channel",
+              "fieldValue": "={{ $('Normalize Inbound Payload').item.json.channel }}"
+            },
+            {
+              "fieldId": "intent",
+              "fieldValue": "={{ $json.output.intent }}"
+            },
+            {
+              "fieldId": "sentiment",
+              "fieldValue": "={{ $json.output.sentiment }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "open"
+            },
+            {
+              "fieldId": "raw_message",
+              "fieldValue": "={{ $('Normalize Inbound Payload').item.json.raw_message }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        16
+      ],
+      "id": "2aa81469-2725-4627-853b-6cf3c3df7b9a",
+      "name": "Log Ticket in Ledger",
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"received\",\n  \"ticket_number\": \"{{ $('Log Ticket in Ledger').item.json.ticket_number }}\",\n  \"intent\": \"{{ $('Classify Intent & Sentiment').item.json.output.intent }}\",\n  \"sentiment\": \"{{ $('Classify Intent & Sentiment').item.json.output.sentiment }}\",\n  \"sla_target_seconds\": 3,\n  \"timestamp\": \"{{ $now.toISO() }}\"\n}\n",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2144,
+        16
+      ],
+      "id": "daf7c5b3-149c-4d6a-9daa-1ff6a5f64465",
+      "name": "Acknowledge Ticket (200)"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Classify Intent & Sentiment').item.json.output.intent }}",
+                    "rightValue": "ADDRESS_UPDATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5a98beb9-8b9f-457e-97c7-a875e1a46b35"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Address Update"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "fd25f7b6-03a2-4d16-96b3-2a8eaf8d35cd",
+                    "leftValue": "={{ $('Classify Intent & Sentiment').item.json.output.intent }}",
+                    "rightValue": "DAMAGED_ITEM",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Damaged Item"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "c346fcf5-8b12-49e6-8603-64a409e67564",
+                    "leftValue": "={{ $('Classify Intent & Sentiment').item.json.output.intent }}",
+                    "rightValue": "REFUND_REQUEST",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Financial Escalation / Refund"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        2368,
+        -16
+      ],
+      "id": "d6216866-c76a-4586-90d7-ceff516c7ee8",
+      "name": "Route by Intent"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "WORKFLOW_ID_ent-03-02-pre-fulfillment-logistics-real",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-02-pre-fulfillment-logistics-real",
+          "cachedResultName": "ENT-03: 02 - Pre-Fulfillment Logistics & Real-Time Address Resolver"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "carrier": "={{ $('Lookup Order Details').item.json.carrier || 'FedEx' }}",
+            "customer_email": "={{ $('Normalize Inbound Payload').item.json.customer_email }}",
+            "extracted_address_correction": "={{ $('Classify Intent & Sentiment').item.json.output?.extracted_address_correction || '' }}",
+            "fulfillment_status": "={{ $('Lookup Order Details').item.json.fulfillment_status || 'unfulfilled' }}",
+            "order_number": "={{ $('Normalize Inbound Payload').item.json.order_number }}",
+            "shipping_address": "={{ $('Lookup Order Details').item.json.shipping_address || {} }}",
+            "ticket_number": "={{ $('Log Ticket in Ledger').item.json.ticket_number }}",
+            "tracking_number": "={{ $('Lookup Order Details').item.json.tracking_number || '' }}"
+          },
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2592,
+        16
+      ],
+      "id": "7944d176-7778-4889-8631-c54551f1762f",
+      "name": "Call 'ENT-03: 02 - Pre-Fulfillment Logistics & Real-Time Address Resolver'"
+    },
+    {
+      "id": "e03-call-subworkflow",
+      "name": "Call 'ENT-03: 03 - Multi-Modal Vision Damage & Warranty Engine'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2592,
+        192
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "cachedResultName": "ENT-03: 03 - Multi-Modal Vision Damage & Warranty Engine",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-03-multi-modal-vision-damage-warr",
+          "mode": "list",
+          "value": "WORKFLOW_ID_ent-03-03-multi-modal-vision-damage-warr"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "channel": "={{ $('Normalize Inbound Payload').item.json.channel }}",
+            "currency": "={{ $('Lookup Order Details').item.json.currency || 'USD' }}",
+            "customer_email": "={{ $('Normalize Inbound Payload').item.json.customer_email }}",
+            "image_url": "={{ $('Inbound Support Webhook').item.json.body?.attachments?.[0]?.url || 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=60' }}",
+            "items": "={{ $('Lookup Order Details').item.json.items || [] }}",
+            "order_id": "={{ $('Lookup Order Details').item.json.id }}",
+            "order_number": "={{ $('Normalize Inbound Payload').item.json.order_number }}",
+            "raw_message": "={{ $('Normalize Inbound Payload').item.json.raw_message }}",
+            "shipping_address": "={{ $('Lookup Order Details').item.json.shipping_address || {} }}",
+            "ticket_id": "={{ $('Log Ticket in Ledger').item.json.id }}",
+            "ticket_number": "={{ $('Log Ticket in Ledger').item.json.ticket_number }}",
+            "total_amount": "={{ $('Lookup Order Details').item.json.total_amount || 0 }}"
+          }
+        }
+      },
+      "disabled": false
+    },
+    {
+      "id": "e04-call-subworkflow",
+      "name": "Call 'ENT-03: 04 - High-Value Financial Escalation & Interactive Slack HITL'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        2592,
+        368
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "cachedResultName": "ENT-03: 04 - High-Value Financial Escalation & Interactive Slack HITL",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-04-high-value-financial-escalatio",
+          "mode": "list",
+          "value": "WORKFLOW_ID_ent-03-04-high-value-financial-escalatio"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "customer_email": "={{ $('Normalize Inbound Payload').item.json.customer_email }}",
+            "customer_name": "={{ ($('Lookup Customer Profile').item.json.first_name ? $('Lookup Customer Profile').item.json.first_name + ' ' + ($('Lookup Customer Profile').item.json.last_name || '') : 'Sarah Jenkins') }}",
+            "items": "={{ $('Lookup Order Details').item.json.items || [] }}",
+            "ltv_tier": "={{ $('Lookup Customer Profile').item.json.ltv_tier || 'standard' }}",
+            "order_count": "={{ $('Lookup Customer Profile').item.json.order_count || 1 }}",
+            "order_number": "={{ $('Normalize Inbound Payload').item.json.order_number }}",
+            "order_value": "={{ $('Lookup Order Details').item.json.total_amount || 0 }}",
+            "raw_message": "={{ $('Normalize Inbound Payload').item.json.raw_message }}",
+            "sentiment": "={{ $('Classify Intent & Sentiment').item.json.output?.sentiment || 'neutral' }}",
+            "ticket_id": "={{ $('Log Ticket in Ledger').item.json.id }}",
+            "ticket_number": "={{ $('Log Ticket in Ledger').item.json.ticket_number }}",
+            "total_spend": "={{ $('Lookup Customer Profile').item.json.total_spend || 0 }}",
+            "urgency": "={{ $('Classify Intent & Sentiment').item.json.output?.urgency || 'high' }}"
+          }
+        }
+      },
+      "disabled": false
+    }
+  ],
+  "connections": {
+    "Inbound Support Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Secret Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Secret Token": {
+      "main": [
+        [
+          {
+            "node": "Normalize Inbound Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Unauthorized (401)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Fraud Blacklist": {
+      "main": [
+        [
+          {
+            "node": "Is Customer Blacklisted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Customer Blacklisted?": {
+      "main": [
+        [
+          {
+            "node": "Drop Blacklisted Inquiry (200 OK)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lookup Customer Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Inbound Payload": {
+      "main": [
+        [
+          {
+            "node": "Check Fraud Blacklist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Customer Profile": {
+      "main": [
+        [
+          {
+            "node": "Lookup Order Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Order Details": {
+      "main": [
+        [
+          {
+            "node": "Classify Intent & Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Intent & Sentiment",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Classify Intent & Sentiment",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Intent & Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Log Ticket in Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Ticket in Ledger": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Ticket (200)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Ticket (200)": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Call 'ENT-03: 02 - Pre-Fulfillment Logistics & Real-Time Address Resolver'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call 'ENT-03: 03 - Multi-Modal Vision Damage & Warranty Engine'",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call 'ENT-03: 04 - High-Value Financial Escalation & Interactive Slack HITL'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+  },
+  "active": false
+}

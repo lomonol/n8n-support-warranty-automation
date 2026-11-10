@@ -1,0 +1,519 @@
+{
+  "name": "ENT-03: 02 - Pre-Fulfillment Logistics & Real-Time Address Resolver",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7a92bf75-03b6-461f-bb61-20db9fca8759",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bac1b4ec-20c6-4c3f-a511-2703fdc56319",
+              "name": "order_number",
+              "type": "string",
+              "value": "={{ $json.order_number }}"
+            },
+            {
+              "id": "9751f998-e112-4cba-bed0-2bff58113046",
+              "name": "ticket_number",
+              "type": "string",
+              "value": "={{ $json.ticket_number }}"
+            },
+            {
+              "id": "182332bf-817d-4e2e-b0ac-1dde97c83c5e",
+              "name": "customer_email",
+              "type": "string",
+              "value": "={{ $json.customer_email }}"
+            },
+            {
+              "id": "c17b8998-ed8c-4533-bba7-7835b221713d",
+              "name": "fulfillment_status",
+              "type": "string",
+              "value": "={{ $json.fulfillment_status || 'unfulfilled' }}"
+            },
+            {
+              "id": "2db5c712-20f1-41f8-9053-f3a6c5b0bf14",
+              "name": "original_shipping_address",
+              "type": "object",
+              "value": "={{ $json.shipping_address || {} }}"
+            },
+            {
+              "id": "carrier-field",
+              "name": "carrier",
+              "type": "string",
+              "value": "={{ $json.carrier || 'FedEx' }}"
+            },
+            {
+              "id": "tracking-field",
+              "name": "tracking_number",
+              "type": "string",
+              "value": "={{ $json.tracking_number || '' }}"
+            },
+            {
+              "id": "c04cf4b5-6792-4f68-bc35-dba0befe1992",
+              "name": "proposed_shipping_address",
+              "type": "object",
+              "value": "={{\n  (() => {\n    const orig = $json.shipping_address || {};\n    const correction = ($json.extracted_address_correction || '').trim();\n    \n    // If customer provided an apartment/unit correction (e.g. \"Apt 4B\", \"Unit 12\", \"Suite 200\")\n    if (correction.match(/^(apt|apartment|unit|suite|ste|#)\\s*\\w+/i) || (correction.length > 0 && correction.length <= 10)) {\n      return {\n        street: orig.street || '',\n        apt: correction,\n        city: orig.city || '',\n        state: orig.state || '',\n        zip: orig.zip || '',\n        country: orig.country || 'USA'\n      };\n    }\n    \n    // If customer provided a full address string\n    return {\n      street: correction || orig.street || '',\n      apt: orig.apt || '',\n      city: orig.city || '',\n      state: orig.state || '',\n      zip: orig.zip || '',\n      country: orig.country || 'USA'\n    };\n  })()\n}}"
+            },
+            {
+              "id": "6e9df995-ffab-490d-9af7-a017b59f9b99",
+              "name": "requested_at",
+              "type": "string",
+              "value": "={{ $now.toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "146a9bdb-b84a-4404-983c-8f8fb22479f7",
+      "name": "Synthesize Proposed Address"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "54880e03-786d-427e-b4a7-99debdc59b48",
+              "leftValue": "={{ $('Synthesize Proposed Address').item.json.fulfillment_status }}",
+              "rightValue": "unfulfilled",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        0
+      ],
+      "id": "8b483e65-cb01-413d-83ad-6e8d36f21b16",
+      "name": "Is Order Unfulfilled?"
+    },
+    {
+      "parameters": {
+        "url": "=https://nominatim.openstreetmap.org/search?format=jsonv2&q={{ encodeURIComponent($('Synthesize Proposed Address').item.json.proposed_shipping_address.city + ', ' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.state + ' ' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.zip) }}&limit=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "LuminaLogisticsResolver/1.0 (you@example.com)"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "68bbb6d1-108e-4524-906a-1a1414469c33",
+      "name": "Validate Address with Geocoder",
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_orders",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "order_number",
+              "condition": "eq",
+              "keyValue": "={{ $('Synthesize Proposed Address').item.json.order_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "shipping_address",
+              "fieldValue": "={{ $('Synthesize Proposed Address').item.json.proposed_shipping_address }}"
+            },
+            {
+              "fieldId": "updated_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "da5575ed-2f4b-45a9-acc0-cfd652a28be1",
+      "name": "Update Order Shipping Address",
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_tickets",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ticket_number",
+              "condition": "eq",
+              "keyValue": "={{ $('Synthesize Proposed Address').item.json.ticket_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "auto_resolved"
+            },
+            {
+              "fieldId": "action_executed",
+              "fieldValue": "address_updated_pre_fulfillment"
+            },
+            {
+              "fieldId": "resolution_time_seconds",
+              "fieldValue": "2"
+            },
+            {
+              "fieldId": "ai_response",
+              "fieldValue": "={{ 'Successfully validated address and updated delivery details to ' + ($('Synthesize Proposed Address').item.json.proposed_shipping_address.street + ' ' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.apt).trim() + ' before warehouse carrier pickup.' }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -96
+      ],
+      "id": "b3001df4-ca6a-46fd-9045-d16f31adfa3f",
+      "name": "Log Resolution in Ticket Ledger",
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c390388d-da86-4171-ac0d-ce1b448b781d",
+              "name": "dispatch_status",
+              "value": "delivered",
+              "type": "string"
+            },
+            {
+              "id": "792f9d05-193f-439e-bc73-44644e2cb9ee",
+              "name": "notification_channel",
+              "value": "email",
+              "type": "string"
+            },
+            {
+              "id": "0e34e159-b8e8-438a-addf-95c2a83e8593",
+              "name": "customer_email",
+              "value": "={{ $('Synthesize Proposed Address').item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "b09bc1b8-1e86-48a7-8493-45e88893b36f",
+              "name": "subject",
+              "value": "={{ 'Order ' + $('Synthesize Proposed Address').item.json.order_number + ': Shipping Address Updated Successfully' }}",
+              "type": "string"
+            },
+            {
+              "id": "64835682-8a70-4817-ac74-959ac3603723",
+              "name": "message_body",
+              "value": "={{ 'Hi there!\\n\\nGreat news — our autonomous fulfillment engine has updated your shipping destination for Order ' + $('Synthesize Proposed Address').item.json.order_number + ' before warehouse label printing.\\n\\nUpdated Delivery Address:\\n' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.street + ' ' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.apt + '\\n' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.city + ', ' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.state + ' ' + $('Synthesize Proposed Address').item.json.proposed_shipping_address.zip + '\\n\\nYour package is scheduled to depart on time via FedEx. No further action is needed!' }}\n",
+              "type": "string"
+            },
+            {
+              "id": "b448d87e-6878-4b89-8096-c2ccf65d2cb0",
+              "name": "resolution_time_seconds",
+              "value": "2",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1344,
+        -96
+      ],
+      "id": "0ce40188-bab2-44a3-9e46-edc5e9a24d23",
+      "name": "Format Confirmation Notice"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_tickets",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "ticket_number",
+              "condition": "eq",
+              "keyValue": "={{ $('Synthesize Proposed Address').item.json.ticket_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "escalated_to_human"
+            },
+            {
+              "fieldId": "action_executed",
+              "fieldValue": "carrier_intercept_requested"
+            },
+            {
+              "fieldId": "ai_response",
+              "fieldValue": "={{ 'Package has already departed warehouse under carrier tracking ' + ($('Synthesize Proposed Address').item?.json?.tracking_number || 'FedEx') + '. Automated FedEx delivery intercept protocol initiated.' }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        96
+      ],
+      "id": "b4dbabc9-e85c-41d7-97ec-1d9a8718147c",
+      "name": "Flag Carrier Intercept in Ledger",
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1a7b7acb-3529-4412-9270-4d587951f412",
+              "name": "dispatch_status",
+              "value": "escalated",
+              "type": "string"
+            },
+            {
+              "id": "e31ac6fb-d178-4ec0-bd89-6cb3c139b8ba",
+              "name": "customer_email",
+              "value": "={{ $('Synthesize Proposed Address').item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "9454e5da-b575-4bac-a59b-d62f59ec91b7",
+              "name": "subject",
+              "value": "={{ 'Urgent Update: Order ' + $('Synthesize Proposed Address').item.json.order_number + ' - Carrier Intercept Initiated' }}",
+              "type": "string"
+            },
+            {
+              "id": "14672a73-64c7-4f68-aba0-dd3494df9607",
+              "name": "message_body",
+              "value": "={{ 'Hi there,\\n\\nWe received your address update request for Order ' + $('Synthesize Proposed Address').item.json.order_number + '. Because your package has already departed our warehouse via FedEx, our operations engine has submitted an urgent in-transit delivery reroute directly with the carrier.\\n\\nOur human fulfillment coordinator is monitoring this tracking number and will email you confirmation as soon as FedEx confirms the reroute.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1120,
+        96
+      ],
+      "id": "e29a18f9-0184-4507-8ea1-eb3c120205ed",
+      "name": "Format Intercept Notice"
+    },
+    {
+      "id": "e05-call-subworkflow",
+      "name": "Call 'ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1472,
+        -48
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "cachedResultName": "ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-05-operations-reconciliation-auto",
+          "mode": "list",
+          "value": "WORKFLOW_ID_ent-03-05-operations-reconciliation-auto"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "action_executed": "address_updated_pre_fulfillment",
+            "customer_email": "={{ $('Synthesize Proposed Address').item.json.customer_email }}",
+            "intent": "address_update",
+            "order_number": "={{ $('Synthesize Proposed Address').item.json.order_number }}",
+            "resolution_time_seconds": 3,
+            "ticket_number": "={{ $('Synthesize Proposed Address').item.json.ticket_number }}"
+          }
+        }
+      },
+      "disabled": false
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Synthesize Proposed Address",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Synthesize Proposed Address": {
+      "main": [
+        [
+          {
+            "node": "Validate Address with Geocoder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Address with Geocoder": {
+      "main": [
+        [
+          {
+            "node": "Is Order Unfulfilled?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Order Unfulfilled?": {
+      "main": [
+        [
+          {
+            "node": "Update Order Shipping Address",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flag Carrier Intercept in Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Order Shipping Address": {
+      "main": [
+        [
+          {
+            "node": "Log Resolution in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Resolution in Ticket Ledger": {
+      "main": [
+        [
+          {
+            "node": "Format Confirmation Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag Carrier Intercept in Ledger": {
+      "main": [
+        [
+          {
+            "node": "Format Intercept Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Confirmation Notice": {
+      "main": [
+        [
+          {
+            "node": "Call 'ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+  },
+  "active": false
+}

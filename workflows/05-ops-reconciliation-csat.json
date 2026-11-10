@@ -1,0 +1,310 @@
+{
+  "name": "ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up",
+  "nodes": [
+    {
+      "id": "4eca6461-cb5b-4912-aac1-4d95d8a86794",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "77649ab6-0183-4f7e-9626-e620d35d6082",
+      "name": "Calculate Operations ROI & CSAT Metrics",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "recon-tck-id",
+              "name": "ticket_id",
+              "value": "={{ $json.ticket_id || $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "recon-tck-num",
+              "name": "ticket_number",
+              "value": "={{ $json.ticket_number }}",
+              "type": "string"
+            },
+            {
+              "id": "recon-ord-num",
+              "name": "order_number",
+              "value": "={{ $json.order_number }}",
+              "type": "string"
+            },
+            {
+              "id": "recon-email",
+              "name": "customer_email",
+              "value": "={{ $json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "recon-intent",
+              "name": "intent",
+              "value": "={{ $json.intent || 'general' }}",
+              "type": "string"
+            },
+            {
+              "id": "recon-act",
+              "name": "action_executed",
+              "value": "={{ $json.action_executed || 'automated_resolution' }}",
+              "type": "string"
+            },
+            {
+              "id": "recon-secs",
+              "name": "resolution_time_seconds",
+              "value": "={{ Number($json.resolution_time_seconds || 12) }}",
+              "type": "number"
+            },
+            {
+              "id": "recon-base",
+              "name": "human_baseline_seconds",
+              "value": 43200,
+              "type": "number"
+            },
+            {
+              "id": "recon-mins",
+              "name": "time_saved_minutes",
+              "value": "={{ Math.round((43200 - Number($json.resolution_time_seconds || 12)) / 60) }}",
+              "type": "number"
+            },
+            {
+              "id": "recon-saved",
+              "name": "cost_saved_usd",
+              "value": "={{ ($json.intent === 'address_update' || $json.intent === 'ADDRESS_UPDATE') ? 32.00 : (($json.intent === 'damaged_item' || $json.intent === 'DAMAGED_ITEM') ? 6.40 : 14.50) }}",
+              "type": "number"
+            },
+            {
+              "id": "recon-csat",
+              "name": "csat_status",
+              "value": "pending_24h_survey",
+              "type": "string"
+            },
+            {
+              "id": "recon-time",
+              "name": "reconciled_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "8bcdfbe1-be6b-4a1c-b753-76c3cb41a282",
+      "name": "Sync to Operations Hub",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appYOUR_BASE_ID",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblYOUR_TABLE_ID",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Incident_ID": "={{ $('Calculate Operations ROI & CSAT Metrics').item.json.ticket_number }}",
+            "Customer_Email": "={{ $('Calculate Operations ROI & CSAT Metrics').item.json.customer_email }}",
+            "Subject": "={{ \"Lumina Goods: \" + $('Calculate Operations ROI & CSAT Metrics').item.json.order_number + \" - \" + $('Calculate Operations ROI & CSAT Metrics').item.json.intent }}",
+            "Status": "Resolved",
+            "Human_Approval_Status": "Auto-Resolved",
+            "Raw_Message": "={{ \"Turnaround: \" + $('Calculate Operations ROI & CSAT Metrics').item.json.resolution_time_seconds + \"s. Dollar Savings: $\" + $('Calculate Operations ROI & CSAT Metrics').item.json.cost_saved_usd + \" USD.\" }}",
+            "Resolution_Draft": "={{ \"Action: \" + $('Calculate Operations ROI & CSAT Metrics').item.json.action_executed + \" | Cost Saved: $\" + $('Calculate Operations ROI & CSAT Metrics').item.json.cost_saved_usd + \" | Time Saved: \" + $('Calculate Operations ROI & CSAT Metrics').item.json.time_saved_minutes + \"m\" }}"
+          }
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_ME",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "828eaf73-ddfb-4495-9b25-10df8b347a2c",
+      "name": "Dispatch Automated CSAT Follow-Up",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "csat-status",
+              "name": "status",
+              "value": "follow_up_scheduled",
+              "type": "string"
+            },
+            {
+              "id": "csat-email",
+              "name": "customer_email",
+              "value": "={{ $(\"Calculate Operations ROI & CSAT Metrics\").item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "csat-sub",
+              "name": "subject",
+              "value": "={{ \"How did we do? Following up on Order \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.order_number }}",
+              "type": "string"
+            },
+            {
+              "id": "csat-msg",
+              "name": "follow_up_message",
+              "value": "={{ \"Hi there,\\n\\nElena from Lumina Goods Co. here following up on your recent support inquiry regarding Order \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.order_number + \" (Ticket \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.ticket_number + \").\\n\\nOur autonomous engine resolved your request in \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.resolution_time_seconds + \" seconds! We want to ensure everything was handled to your complete satisfaction.\\n\\nPlease rate your experience: [ ⭐⭐⭐⭐⭐ Excellent ] [ ⭐⭐⭐ Satisfactory ] [ ⭐ Needs Improvement ]\\n\\nThank you for choosing Lumina Goods Co.!\" }}",
+              "type": "string"
+            },
+            {
+              "id": "csat-delay",
+              "name": "dispatch_delay_hours",
+              "value": 24,
+              "type": "number"
+            },
+            {
+              "id": "csat-time",
+              "name": "dispatched_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e4d264ff-224f-40aa-a052-01c326bff185",
+      "name": "Format Reconciliation Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "sum-status",
+              "name": "status",
+              "value": "operations_reconciled",
+              "type": "string"
+            },
+            {
+              "id": "sum-tck",
+              "name": "ticket_number",
+              "value": "={{ $(\"Calculate Operations ROI & CSAT Metrics\").item.json.ticket_number }}",
+              "type": "string"
+            },
+            {
+              "id": "sum-ord",
+              "name": "order_number",
+              "value": "={{ $(\"Calculate Operations ROI & CSAT Metrics\").item.json.order_number }}",
+              "type": "string"
+            },
+            {
+              "id": "sum-saved",
+              "name": "cost_saved_usd",
+              "value": "={{ $(\"Calculate Operations ROI & CSAT Metrics\").item.json.cost_saved_usd }}",
+              "type": "number"
+            },
+            {
+              "id": "sum-time-saved",
+              "name": "time_saved_minutes",
+              "value": "={{ $(\"Calculate Operations ROI & CSAT Metrics\").item.json.time_saved_minutes }}",
+              "type": "number"
+            },
+            {
+              "id": "sum-time",
+              "name": "reconciled_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Calculate Operations ROI & CSAT Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Operations ROI & CSAT Metrics": {
+      "main": [
+        [
+          {
+            "node": "Sync to Operations Hub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sync to Operations Hub": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Automated CSAT Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Automated CSAT Follow-Up": {
+      "main": [
+        [
+          {
+            "node": "Format Reconciliation Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+  },
+  "active": false
+}

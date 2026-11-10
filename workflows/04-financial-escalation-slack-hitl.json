@@ -1,0 +1,316 @@
+{
+  "name": "ENT-03: 04 - High-Value Financial Escalation & Interactive Slack HITL",
+  "nodes": [
+    {
+      "id": "a100c703-a5f0-46c3-af12-aabe99e8f487",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "79ed1aeb-0a73-43b0-8e0f-c6d37488be78",
+      "name": "Evaluate Threshold & Calculate Options",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "hitl-tck-id",
+              "name": "ticket_id",
+              "value": "={{ $json.ticket_id || $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-tck-num",
+              "name": "ticket_number",
+              "value": "={{ $json.ticket_number }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-ord-num",
+              "name": "order_number",
+              "value": "={{ $json.order_number }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-email",
+              "name": "customer_email",
+              "value": "={{ $json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-name",
+              "name": "customer_name",
+              "value": "={{ $json.customer_name || ($json.first_name ? $json.first_name + ' ' + ($json.last_name || '') : 'Sarah Jenkins') }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-ltv",
+              "name": "ltv_tier",
+              "value": "={{ $json.ltv_tier || 'standard' }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-spend",
+              "name": "total_spend",
+              "value": "={{ Number($json.total_spend || 0) }}",
+              "type": "number"
+            },
+            {
+              "id": "hitl-count",
+              "name": "order_count",
+              "value": "={{ Number($json.order_count || 1) }}",
+              "type": "number"
+            },
+            {
+              "id": "hitl-val",
+              "name": "order_value",
+              "value": "={{ Number($json.total_amount || $json.order_value || 0) }}",
+              "type": "number"
+            },
+            {
+              "id": "hitl-credit",
+              "name": "store_credit_amount",
+              "value": "={{ (Number($json.total_amount || $json.order_value || 0) * 1.20).toFixed(2) }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-msg",
+              "name": "raw_message",
+              "value": "={{ $json.raw_message || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-snt",
+              "name": "sentiment",
+              "value": "={{ $json.sentiment || 'neutral' }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-urg",
+              "name": "urgency",
+              "value": "={{ $json.urgency || 'medium' }}",
+              "type": "string"
+            },
+            {
+              "id": "hitl-reason",
+              "name": "escalation_reason",
+              "value": "={{ Number($json.total_amount || $json.order_value || 0) > 100 ? 'High-Value Refund Threshold ($' + Number($json.total_amount || $json.order_value || 0).toFixed(2) + ' > $100)' : ($json.sentiment === 'hostile' || $json.sentiment === 'frustrated' ? 'Customer Sentiment Alert (' + $json.sentiment + ')' : 'Executive Manager Review') }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "6ff4d3d2-6485-4412-9d8e-4f8a646616ae",
+      "name": "Dispatch Slack HITL Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    channel: \"C0CDJNJAFQS\",\n    text: \"🚨 VIP ESCALATION: \" + $json.order_number + \" ($\" + $json.order_value + \") - \" + $json.customer_name,\n    blocks: [\n      {\n        type: \"header\",\n        text: {\n          type: \"plain_text\",\n          text: \"🚨 VIP FINANCIAL ESCALATION: \" + $json.order_number,\n          emoji: true\n        }\n      },\n      {\n        type: \"section\",\n        fields: [\n          {\n            type: \"mrkdwn\",\n            text: \"*Customer:*\\n\" + $json.customer_name + \" (<mailto:\" + $json.customer_email + \"|\" + $json.customer_email + \">)\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*LTV Tier:*\\n⭐ \" + $json.ltv_tier.toUpperCase() + \" ($\" + $json.total_spend.toLocaleString() + \" across \" + $json.order_count + \" orders)\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Claim Amount:*\\n💰 $\" + $json.order_value.toFixed(2) + \" USD\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Sentiment & Urgency:*\\n⚠️ \" + $json.sentiment.toUpperCase() + \" / \" + $json.urgency.toUpperCase()\n          }\n        ]\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Trigger Reason:*\\n`\" + $json.escalation_reason + \"`\"\n        }\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Customer Stated:*\\n> \\\"\" + ($json.raw_message || \"\").replace(/\"/g, '\\\\\"') + \"\\\"\"\n        }\n      },\n      {\n        type: \"divider\"\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Executive Action Required:* Select an approved resolution below to execute immediately:\"\n        }\n      },\n      {\n        type: \"actions\",\n        block_id: \"lumina_resolution_actions\",\n        elements: [\n          {\n            type: \"button\",\n            text: {\n              type: \"plain_text\",\n              text: \"💳 Approve $\" + $json.order_value.toFixed(2) + \" Refund\",\n              emoji: true\n            },\n            style: \"danger\",\n            action_id: \"lumina_refund_full\",\n            value: \"lumina_refund_full|\" + $json.ticket_id + \"|\" + $json.order_number + \"|\" + $json.order_value.toFixed(2)\n          },\n          {\n            type: \"button\",\n            text: {\n              type: \"plain_text\",\n              text: \"🎁 Offer $\" + $json.store_credit_amount + \" Store Credit (+20%)\",\n              emoji: true\n            },\n            style: \"primary\",\n            action_id: \"lumina_credit_120\",\n            value: \"lumina_credit_120|\" + $json.ticket_id + \"|\" + $json.order_number + \"|\" + $json.store_credit_amount\n          }\n        ]\n      }\n    ]\n  })\n}}"
+      }
+    },
+    {
+      "id": "036898ae-e13f-42b8-9001-44589e1fe8f9",
+      "name": "Log Escalation in Ticket Ledger",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_tickets",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "ticket_number",
+              "keyValue": "={{ $(\"Evaluate Threshold & Calculate Options\").item.json.ticket_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "escalated_to_human"
+            },
+            {
+              "fieldId": "action_executed",
+              "fieldValue": "escalated_to_slack_hitl"
+            },
+            {
+              "fieldId": "ai_response",
+              "fieldValue": "={{ \"High-value financial escalation dispatched to Slack #ops-approvals (Message TS: \" + $json.ts + \"). Escalation Reason: \" + $(\"Evaluate Threshold & Calculate Options\").item.json.escalation_reason + \". Awaiting executive sign-off.\" }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "862c6483-38a3-4ca2-8c6d-adec2acb6781",
+      "name": "Format Escalation Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "esc-status",
+              "name": "status",
+              "value": "escalated_to_slack_hitl",
+              "type": "string"
+            },
+            {
+              "id": "esc-tck",
+              "name": "ticket_number",
+              "value": "={{ $(\"Evaluate Threshold & Calculate Options\").item.json.ticket_number }}",
+              "type": "string"
+            },
+            {
+              "id": "esc-ord",
+              "name": "order_number",
+              "value": "={{ $(\"Evaluate Threshold & Calculate Options\").item.json.order_number }}",
+              "type": "string"
+            },
+            {
+              "id": "esc-email",
+              "name": "customer_email",
+              "value": "={{ $(\"Evaluate Threshold & Calculate Options\").item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "esc-channel",
+              "name": "channel",
+              "value": "#ops-approvals",
+              "type": "string"
+            },
+            {
+              "id": "esc-ts",
+              "name": "slack_message_ts",
+              "value": "={{ $(\"Dispatch Slack HITL Card\").item.json.ts }}",
+              "type": "string"
+            },
+            {
+              "id": "esc-reason",
+              "name": "escalation_reason",
+              "value": "={{ $(\"Evaluate Threshold & Calculate Options\").item.json.escalation_reason }}",
+              "type": "string"
+            },
+            {
+              "id": "esc-time",
+              "name": "dispatched_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Threshold & Calculate Options",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Threshold & Calculate Options": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Slack HITL Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch Slack HITL Card": {
+      "main": [
+        [
+          {
+            "node": "Log Escalation in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Escalation in Ticket Ledger": {
+      "main": [
+        [
+          {
+            "node": "Format Escalation Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+  },
+  "active": false
+}

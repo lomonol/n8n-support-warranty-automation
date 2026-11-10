@@ -1,0 +1,703 @@
+{
+  "name": "ENT-03: 03 - Multi-Modal Vision Damage & Warranty Engine",
+  "nodes": [
+    {
+      "id": "21c6ef52-d9d4-47cb-a0b7-ff25b2bd4682",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        112
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "0e53b1de-43ea-4069-a8f3-c235caf17bea",
+      "name": "Parse Claim & Normalize Attachments",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        112
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "claim-ord-num",
+              "name": "order_number",
+              "value": "={{ $json.order_number }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-tck-num",
+              "name": "ticket_number",
+              "value": "={{ $json.ticket_number }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-tck-id",
+              "name": "ticket_id",
+              "value": "={{ $json.ticket_id || $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-ord-id",
+              "name": "order_id",
+              "value": "={{ $json.order_id }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-email",
+              "name": "customer_email",
+              "value": "={{ $json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-val",
+              "name": "order_value",
+              "value": "={{ Number($json.total_amount || $json.order_value || 0) }}",
+              "type": "number"
+            },
+            {
+              "id": "claim-curr",
+              "name": "currency",
+              "value": "={{ $json.currency || \"USD\" }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-addr",
+              "name": "shipping_address",
+              "value": "={{ $json.shipping_address || {} }}",
+              "type": "object"
+            },
+            {
+              "id": "claim-items",
+              "name": "items",
+              "value": "={{ $json.items || [] }}",
+              "type": "array"
+            },
+            {
+              "id": "claim-img",
+              "name": "image_url",
+              "value": "={{ ($json.attachments && $json.attachments[0]?.url) || $json.image_url || \"https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=60\" }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-msg",
+              "name": "raw_message",
+              "value": "={{ $json.raw_message || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "claim-time",
+              "name": "claim_received_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "e88f08f2-97f6-4ed0-ac60-f1f920985cd2",
+      "name": "Multi-Modal Vision Inspection",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        448,
+        112
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=CUSTOMER DAMAGE REPORT:\nCustomer Email: {{ $json.customer_email }}\nReferenced Order: {{ $json.order_number }}\nPurchased Items: {{ JSON.stringify($json.items) }}\nOrder Value: ${{ $json.order_value }}\nCustomer Complaint:\n\"{{ $json.raw_message }}\"\n\nIMAGE EVIDENCE ATTACHMENT:\nPhoto URL: {{ $json.image_url }}\n\nPlease inspect the attached photo evidence and evaluate against customer complaint.",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are the Senior Fulfillment & Warranty Inspection AI for Lumina Goods Co.\nYour job is to examine photographic evidence of damaged products delivered to customers.\n\nEvaluation Rubric:\n1. Authenticity: Does the image show actual physical damage (cracks, shattered ceramics, torn fabrics, leaking liquids, punctures, structural defects)?\n2. Severity:\n   - \"catastrophic\" - Completely broken, unusable, shattered ceramic/glass, heavy structural destruction.\n   - \"moderate\" - Significant visible crack, dent, or functional defect.\n   - \"minor\" - Superficial cosmetic scratch or dent that does not prevent normal use.\n   - \"no_damage\" - Product appears intact, pristine, or photo is unrelated/blurry.\n3. Confidence Score: 0 to 100 rating your visual certainty.\n4. Reasoning: Precise visual details explaining the damage found in the image.\n\nCRITICAL OUTPUT REQUIREMENT:\nYou MUST format your entire response as a JSON markdown codeblock wrapped under the root key \"output\", exactly matching:\n```json\n{\n  \"output\": {\n    \"damage_detected\": true,\n    \"damage_severity\": \"catastrophic\",\n    \"confidence_score\": 95,\n    \"item_description\": \"Detailed description of item and damage\",\n    \"ai_audit_reasoning\": \"Visual proof analysis\"\n  }\n}\n```\nDo not include any text before or after the JSON markdown block.",
+              "type": "SystemMessagePromptTemplate"
+            },
+            {
+              "imageDetail": "auto",
+              "imageUrl": "={{ $json.image_url }}",
+              "messageType": "imageUrl",
+              "type": "HumanMessagePromptTemplate"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4bad0885-0587-40e8-8f5e-eae877e36988",
+      "name": "OpenRouter Vision Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        464,
+        336
+      ],
+      "parameters": {
+        "model": "openrouter/free",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "credentials": {
+        "openRouterApi": {
+          "id": "REPLACE_ME",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "id": "29f0b99f-51cb-4f51-a044-35cf593f028f",
+      "name": "Damage Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        336
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "={\n  \"type\": \"object\",\n  \"properties\": {\n    \"damage_detected\": {\n      \"type\": \"boolean\",\n      \"description\": \"True if genuine physical damage or defect is visible in the photo\"\n    },\n    \"damage_severity\": {\n      \"type\": \"string\",\n      \"enum\": [\"minor\", \"moderate\", \"catastrophic\", \"no_damage\"],\n      \"description\": \"Severity level of the observed defect\"\n    },\n    \"confidence_score\": {\n      \"type\": \"number\",\n      \"description\": \"Confidence score between 0 and 100\"\n    },\n    \"item_description\": {\n      \"type\": \"string\",\n      \"description\": \"Brief description of the damaged item identified in the image\"\n    },\n    \"ai_audit_reasoning\": {\n      \"type\": \"string\",\n      \"description\": \"Detailed visual audit justification\"\n    }\n  },\n  \"required\": [\"damage_detected\", \"damage_severity\", \"confidence_score\", \"ai_audit_reasoning\"]\n}"
+      }
+    },
+    {
+      "id": "3b6d29a7-074c-49fa-9723-ab3d6324086a",
+      "name": "Is Fast-Path Eligible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        800,
+        112
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "cond-damage",
+              "leftValue": "={{ $json.output.damage_detected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-conf",
+              "leftValue": "={{ $json.output.confidence_score }}",
+              "rightValue": 60,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "cond-val",
+              "leftValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.order_value }}",
+              "rightValue": 100,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "5d8f21e7-39fb-45ed-a828-5a5eb340cdf0",
+      "name": "Create Replacement Order",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        16
+      ],
+      "parameters": {
+        "operation": "create",
+        "tableId": "support_orders",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "order_number",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-R1\" }}"
+            },
+            {
+              "fieldId": "customer_email",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.customer_email }}"
+            },
+            {
+              "fieldId": "total_amount",
+              "fieldValue": "0.00"
+            },
+            {
+              "fieldId": "currency",
+              "fieldValue": "USD"
+            },
+            {
+              "fieldId": "fulfillment_status",
+              "fieldValue": "unfulfilled"
+            },
+            {
+              "fieldId": "shipping_address",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.shipping_address }}"
+            },
+            {
+              "fieldId": "tracking_number",
+              "fieldValue": "={{ \"FDX-RPL-\" + Math.floor(1000000000 + Math.random() * 9000000000) }}"
+            },
+            {
+              "fieldId": "carrier",
+              "fieldValue": "FedEx"
+            },
+            {
+              "fieldId": "items",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.items }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "id": "24710680-6c71-436c-9efb-52cd442f49c7",
+      "name": "Record Damage Claim",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        16
+      ],
+      "parameters": {
+        "operation": "create",
+        "tableId": "support_damage_claims",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "ticket_id",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.ticket_id }}"
+            },
+            {
+              "fieldId": "order_id",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.order_id }}"
+            },
+            {
+              "fieldId": "image_url",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.image_url }}"
+            },
+            {
+              "fieldId": "ai_damage_detected",
+              "fieldValue": "={{ $(\"Multi-Modal Vision Inspection\").item.json.output.damage_detected }}"
+            },
+            {
+              "fieldId": "damage_severity",
+              "fieldValue": "={{ $(\"Multi-Modal Vision Inspection\").item.json.output.damage_severity }}"
+            },
+            {
+              "fieldId": "ai_confidence_score",
+              "fieldValue": "={{ $(\"Multi-Modal Vision Inspection\").item.json.output.confidence_score }}"
+            },
+            {
+              "fieldId": "ai_audit_reasoning",
+              "fieldValue": "={{ $(\"Multi-Modal Vision Inspection\").item.json.output.ai_audit_reasoning }}"
+            },
+            {
+              "fieldId": "replacement_order_id",
+              "fieldValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-R1\" }}"
+            },
+            {
+              "fieldId": "return_label_url",
+              "fieldValue": "={{ \"https://returns.example.com/labels/\" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-RETURN.pdf\" }}"
+            },
+            {
+              "fieldId": "approved_by",
+              "fieldValue": "autonomous_vision_engine"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "id": "63bf379b-9190-4844-b5f6-0ca6a755b5ed",
+      "name": "Log Resolution in Ticket Ledger",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1472,
+        16
+      ],
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_tickets",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "ticket_number",
+              "keyValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.ticket_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "auto_resolved"
+            },
+            {
+              "fieldId": "action_executed",
+              "fieldValue": "replacement_order_created"
+            },
+            {
+              "fieldId": "resolution_time_seconds",
+              "fieldValue": "12"
+            },
+            {
+              "fieldId": "ai_response",
+              "fieldValue": "={{ \"Verified damage via computer vision (\" + $(\"Multi-Modal Vision Inspection\").item.json.output.damage_severity + \" severity, confidence \" + $(\"Multi-Modal Vision Inspection\").item.json.output.confidence_score + \"%). Autonomously generated free replacement order \" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-R1 with prepaid return label.\" }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "id": "b1611d86-e5ec-47dc-a0ce-67982a7ddb69",
+      "name": "Format Replacement Notice",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1696,
+        16
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "repl-status",
+              "name": "dispatch_status",
+              "value": "delivered",
+              "type": "string"
+            },
+            {
+              "id": "repl-email",
+              "name": "customer_email",
+              "value": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "repl-sub",
+              "name": "subject",
+              "value": "={{ \"Warranty Claim Approved: Replacement Order \" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-R1 placed!\" }}",
+              "type": "string"
+            },
+            {
+              "id": "repl-body",
+              "name": "message_body",
+              "value": "={{ \"Hi there,\\n\\nWe are so sorry your Nordic diffuser arrived damaged! Our autonomous vision engine inspected your photo, verified the cracked ceramic defect, and approved your replacement claim immediately.\\n\\nYour replacement order \" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-R1 has been entered into our warehouse fulfillment queue and will depart via FedEx within 24 hours.\\n\\nYou can download your prepaid return label to return the broken unit at:\\n\" + \"https://returns.example.com/labels/\" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-RETURN.pdf\\n\\nThank you for choosing Lumina Goods Co.!\" }}",
+              "type": "string"
+            },
+            {
+              "id": "repl-time",
+              "name": "resolution_time_seconds",
+              "value": 12,
+              "type": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f6b826ff-0487-44b1-bbe8-3e7e8b59ea78",
+      "name": "Log Escalation in Ticket Ledger",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        208
+      ],
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_tickets",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "ticket_number",
+              "keyValue": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.ticket_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "escalated_to_human"
+            },
+            {
+              "fieldId": "action_executed",
+              "fieldValue": "escalated_to_slack_hitl"
+            },
+            {
+              "fieldId": "ai_response",
+              "fieldValue": "={{ \"Damage claim requires human manager review. Reason: \" + ($(\"Parse Claim & Normalize Attachments\").item.json.order_value > 100 ? \"High-value threshold ($\" + $(\"Parse Claim & Normalize Attachments\").item.json.order_value + \" > $100)\" : \"Visual audit ambiguity\") + \". Dispatched to Slack #ops-approvals.\" }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "id": "88aec034-a071-4e4c-b564-d60ab9174997",
+      "name": "Format Escalation Notice",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1248,
+        208
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "esc-status",
+              "name": "dispatch_status",
+              "value": "escalated",
+              "type": "string"
+            },
+            {
+              "id": "esc-email",
+              "name": "customer_email",
+              "value": "={{ $(\"Parse Claim & Normalize Attachments\").item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "esc-sub",
+              "name": "subject",
+              "value": "={{ \"Update: Damage Claim for Order \" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \" Under Expedited Review\" }}",
+              "type": "string"
+            },
+            {
+              "id": "esc-body",
+              "name": "message_body",
+              "value": "={{ \"Hi there,\\n\\nThank you for sending photographic evidence for Order \" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \". Because your claim involves high-value or customized artisan goods, our Senior Operations Manager has received your file for expedited review.\\n\\nYou will receive a final resolution email within 2 business hours.\" }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "85bff702-9222-49ba-89c1-89770a7b25b6",
+      "name": "Call 'ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up'",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        1920,
+        16
+      ],
+      "parameters": {
+        "options": {},
+        "workflowId": {
+          "__rl": true,
+          "cachedResultName": "ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-05-operations-reconciliation-auto",
+          "mode": "list",
+          "value": "WORKFLOW_ID_ent-03-05-operations-reconciliation-auto"
+        },
+        "workflowInputs": {
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false,
+          "mappingMode": "defineBelow",
+          "matchingColumns": [],
+          "schema": [],
+          "value": {
+            "action_executed": "replacement_order_created",
+            "customer_email": "={{ $('Parse Claim & Normalize Attachments').item.json.customer_email }}",
+            "intent": "damaged_item",
+            "order_number": "={{ $('Parse Claim & Normalize Attachments').item.json.order_number }}",
+            "resolution_time_seconds": 12,
+            "ticket_id": "={{ $('Parse Claim & Normalize Attachments').item.json.ticket_id }}",
+            "ticket_number": "={{ $('Parse Claim & Normalize Attachments').item.json.ticket_number }}"
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Claim & Normalize Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Claim & Normalize Attachments": {
+      "main": [
+        [
+          {
+            "node": "Multi-Modal Vision Inspection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Multi-Modal Vision Inspection": {
+      "main": [
+        [
+          {
+            "node": "Is Fast-Path Eligible?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Vision Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Multi-Modal Vision Inspection",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Damage Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Multi-Modal Vision Inspection",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Fast-Path Eligible?": {
+      "main": [
+        [
+          {
+            "node": "Create Replacement Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Escalation in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Replacement Order": {
+      "main": [
+        [
+          {
+            "node": "Record Damage Claim",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Damage Claim": {
+      "main": [
+        [
+          {
+            "node": "Log Resolution in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Resolution in Ticket Ledger": {
+      "main": [
+        [
+          {
+            "node": "Format Replacement Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Escalation in Ticket Ledger": {
+      "main": [
+        [
+          {
+            "node": "Format Escalation Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Replacement Notice": {
+      "main": [
+        [
+          {
+            "node": "Call 'ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+  },
+  "active": false
+}

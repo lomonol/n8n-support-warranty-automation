@@ -1,0 +1,8 @@
+{
+  "channel": "email",
+  "customer_email": "customer@example.com",
+  "order_number": "LUM-10001",
+  "subject": "Damaged item",
+  "message": "My order arrived with a cracked lid, photo attached.",
+  "attachments": ["https://example.com/photo.jpg"]
+}

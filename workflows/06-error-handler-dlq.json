@@ -1,0 +1,198 @@
+{
+  "name": "ENT-03: Global Error Handler & Dead-Letter Queue (DLQ)",
+  "nodes": [
+    {
+      "id": "230a2760-4527-4b50-85ff-a4eb7d00c02f",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "99a67491-cf66-4f37-92e1-e6363b14d364",
+      "name": "Format Error Snapshot",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-id",
+              "name": "error_id",
+              "value": "={{ 'ERR-ENT03-' + $now.format('yyyyMMdd') + '-' + Math.floor(1000 + Math.random() * 9000) }}",
+              "type": "string"
+            },
+            {
+              "id": "err-wf-name",
+              "name": "workflow_name",
+              "value": "={{ $json.workflow.name || 'ENT-03 Autonomous Resolution Engine' }}",
+              "type": "string"
+            },
+            {
+              "id": "err-wf-id",
+              "name": "workflow_id",
+              "value": "={{ $json.workflow.id }}",
+              "type": "string"
+            },
+            {
+              "id": "err-node",
+              "name": "failed_node",
+              "value": "={{ $json.execution.lastNodeExecuted || 'Unknown Node' }}",
+              "type": "string"
+            },
+            {
+              "id": "err-msg",
+              "name": "error_message",
+              "value": "={{ $json.execution.error.message || 'Unhandled error occurred during workflow execution.' }}",
+              "type": "string"
+            },
+            {
+              "id": "err-url",
+              "name": "execution_url",
+              "value": "={{ $json.execution.url }}",
+              "type": "string"
+            },
+            {
+              "id": "err-exec-id",
+              "name": "execution_id",
+              "value": "={{ $json.execution.id }}",
+              "type": "string"
+            },
+            {
+              "id": "err-time",
+              "name": "timestamp",
+              "value": "={{ $now.setZone('Asia/Manila').toFormat('yyyy-MM-dd HH:mm:ss') }}",
+              "type": "string"
+            },
+            {
+              "id": "err-status",
+              "name": "status",
+              "value": "Unresolved",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2f3c122a-fd6b-4fea-bf2c-7d4f5b34d198",
+      "name": "Log Error to DLQ",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appYOUR_BASE_ID",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblYOUR_TABLE_ID",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Error_ID": "={{ $(\"Format Error Snapshot\").item.json.error_id }}",
+            "Workflow_Name": "={{ $(\"Format Error Snapshot\").item.json.workflow_name }}",
+            "Failed_Node": "={{ $(\"Format Error Snapshot\").item.json.failed_node }}",
+            "Error_Message": "={{ $(\"Format Error Snapshot\").item.json.error_message }}",
+            "Payload_Snapshot": "={{ JSON.stringify($(\"Format Error Snapshot\").item.json) }}",
+            "Timestamp": "={{ $(\"Format Error Snapshot\").item.json.timestamp }}",
+            "Status": "Unresolved"
+          }
+        }
+      },
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "REPLACE_ME",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "id": "ba7b76d1-e44c-40a1-ae6c-182e807d57de",
+      "name": "Alert DevOps Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SLACK_BOT_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=utf-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  JSON.stringify({\n    channel: \"C0CDJNJAFQS\",\n    text: \"🚨 CRITICAL ENGINE FAILURE: \" + $('Format Error Snapshot').item.json.error_id + \" in \" + $('Format Error Snapshot').item.json.workflow_name,\n    blocks: [\n      {\n        type: \"header\",\n        text: {\n          type: \"plain_text\",\n          text: \"🚨 Lumina Goods Engine Failure (DLQ)\",\n          emoji: true\n        }\n      },\n      {\n        type: \"section\",\n        fields: [\n          {\n            type: \"mrkdwn\",\n            text: \"*Error ID:*\\n`\" + $('Format Error Snapshot').item.json.error_id + \"`\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Workflow:*\\n\" + $('Format Error Snapshot').item.json.workflow_name\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Failed Node:*\\n`\" + $('Format Error Snapshot').item.json.failed_node + \"`\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Timestamp:*\\n\" + $('Format Error Snapshot').item.json.timestamp\n          }\n        ]\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Error Message:*\\n```\" + ($('Format Error Snapshot').item.json.error_message || '').slice(0, 400) + \"```\"\n        }\n      },\n      {\n        type: \"actions\",\n        elements: [\n          {\n            type: \"button\",\n            text: {\n              type: \"plain_text\",\n              text: \"🔍 Debug Execution in n8n\",\n              emoji: true\n            },\n            style: \"danger\",\n            url: $('Format Error Snapshot').item.json.execution_url\n          }\n        ]\n      }\n    ]\n  })\n}}"
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Log Error to DLQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Error to DLQ": {
+      "main": [
+        [
+          {
+            "node": "Alert DevOps Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "active": false
+}
