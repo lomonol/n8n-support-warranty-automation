@@ -182,18 +182,7 @@ Airtable holds the operations hub and the dead-letter table.
 
 ## Testing and verification
 
-**Vision input.** Before building the photo step I ran the vision model by hand against real photos with the workflow's prompt, rubric and credential. It is a small manual check, not an accuracy measurement.
-
-| Image | How it was sent | Result |
-|---|---|---|
-| Unrelated photo (blister packs) for a "cracked diffuser" claim | URL, twice | `no_damage`, 95-98 confidence, accurate description |
-| Chipped teapot lid | URL | Provider error (HTTP 422) |
-| Chipped teapot lid | URL, retry | Reported a blank white image at 98 confidence |
-| Hairline-cracked mug | URL, twice | Called it intact at 98 confidence |
-| Chipped teapot lid | Base64 data URL | `damage_detected`, `moderate`, 95 |
-| Hairline-cracked mug | Base64 data URL | `damage_detected`, `moderate`, 95, crack described correctly |
-
-When the provider had to fetch a remote URL itself the answers were unreliable; when the same photos were sent inline every answer was correct. That is why workflow 03 downloads the photo first and sends it as image data to a pinned model.
+**Vision input.** The vision step was checked by hand against real photos using the workflow's prompt, rubric and credential. It is a small manual check, not an accuracy measurement. Sent as remote URLs, the provider's answers on the same photos were inconsistent; sent inline as base64 data, every answer was correct (a chipped teapot lid and a hairline-cracked mug were both reported as `damage_detected`, `moderate`, with the crack described correctly). That is why workflow 03 downloads the photo first and sends it as image data to a pinned model.
 
 **Live runs through the intake webhook** on seeded orders, with the ticket rows read back afterwards:
 
@@ -253,7 +242,7 @@ Everything below is a setting or a node swap, not a rewrite. The defaults are wh
 
    ```bash
    curl -X POST https://YOUR-N8N-HOST/webhook/support-intake \
-     -H "X-Lumina-Secret-Key: YOUR_SHARED_SECRET" \
+     -H "X-Intake-Secret: YOUR_SHARED_SECRET" \
      -H "Content-Type: application/json" \
      -d @samples/support-intake.json
    ```

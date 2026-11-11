@@ -29,7 +29,7 @@
           "conditions": [
             {
               "id": "7c465b45-4692-40c9-8631-8fb131977aff",
-              "leftValue": "={{ $json.headers['x-lumina-secret-key'] }}",
+              "leftValue": "={{ $json.headers['x-intake-secret'] }}",
               "rightValue": "YOUR_SHARED_SECRET",
               "operator": {
                 "type": "string",
@@ -54,7 +54,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"error\": \"Unauthorized\",\n  \"message\": \"Invalid or missing X-Lumina-Secret-Key header. Support request rejected.\"\n}\n",
+        "responseBody": "={\n  \"error\": \"Unauthorized\",\n  \"message\": \"Invalid or missing X-Intake-Secret header. Support request rejected.\"\n}\n",
         "options": {
           "responseCode": 401
         }
