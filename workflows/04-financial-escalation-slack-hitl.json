@@ -276,7 +276,7 @@
       "parameters": {
         "width": 420,
         "height": 200,
-        "content": "## Depends on the shared interactions router\nThe Approve / Offer-credit buttons on the Slack card carry an action_id (lumina_refund_full, lumina_credit_120). The click is handled by the shared interactions router workflow (published in the incident-platform repo), NOT by this workflow. If the router is inactive or its Slack Request URL is wrong, the card posts but the buttons do nothing and the ticket stays escalated_to_human.\n\nTest end to end: send a refund request over $100 to the intake webhook, click a button in Slack, then check the ticket and order rows."
+        "content": "## Depends on the shared interactions router\nThe Approve / Offer-credit buttons on the Slack card carry an action_id (lumina_refund_full, lumina_credit_120). The click is handled by the shared interactions router workflow (a separate workflow, not included here), NOT by this workflow. If the router is inactive or its Slack Request URL is wrong, the card posts but the buttons do nothing and the ticket stays escalated_to_human.\n\nTest end to end: send a refund request over $100 to the intake webhook, click a button in Slack, then check the ticket and order rows."
       }
     }
   ],
