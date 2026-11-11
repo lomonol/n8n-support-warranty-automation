@@ -8,10 +8,10 @@
 |---|---|
 | **Type** | Portfolio build (reference implementation for a fictional home-goods store, not a client engagement) |
 | **My role** | Sole designer and builder: routing design, prompt and schema design, data model, escalation policy |
-| **Scale** | 6 workflows, 55 nodes, 5 Supabase tables, intake plus 3 specialist flows plus reconciliation |
+| **Scale** | 6 workflows, 66 nodes, 5 Supabase tables, intake plus 3 specialist flows plus reconciliation |
 | **Core vs extension** | The core flow is workflows 01-03 (intake and routing, address resolver, damage engine). 04 (refund escalation) and 05 (reconciliation) extend it. |
 | **Stack** | n8n, OpenRouter (text and vision models), Supabase, Airtable, Slack API, OpenStreetMap Nominatim |
-| **Status** | Runs on sample data, not real customers. Known defects are listed at the bottom. |
+| **Status** | Runs on sample data, not real customers. Most of my own audit findings are fixed and re-tested live (see [Testing](#testing-and-verification)); what is still open is listed at the bottom. |
 
 > **If you only read one section:** [Why this is interesting](#why-this-is-interesting) and [What I would fix next](#what-i-would-fix-next).
 
@@ -57,20 +57,28 @@ flowchart TD
   R -- address update --> W2
   R -- damaged item --> W3
   R -- refund --> W4
+  R -- order status --> OS{Order found?}
+  OS -- yes --> SR[Status reply from order record, auto_resolved]
+  OS -- no --> HO
+  R -- anything else --> HO[Human handoff, escalated_to_human]
   subgraph W2[02 Address resolver]
-    G[Geocode proposed address] --> F{Order unfulfilled?}
+    G[Geocode proposed address] --> GM{Geocode matched?}
+    GM -- no --> AU[Order unchanged, ask customer, awaiting_customer]
+    GM -- yes --> F{Order unfulfilled?}
     F -- yes --> U[Update order address, ticket auto_resolved]
     F -- no --> I[Flag carrier intercept, escalated_to_human]
   end
   subgraph W3[03 Vision damage engine]
-    V[Vision model inspects photo] --> E{Damage AND confidence >= 60<br/>AND order <= $100}
+    HP{Photo supplied?} -- no --> ES
+    HP -- yes --> DL[Download photo as binary] --> V[Vision model inspects photo]
+    V --> E{Damage AND confidence >= 60<br/>AND order <= $100}
     E -- yes --> RO[Create replacement order -R1<br/>record claim, auto_resolved]
     E -- no --> ES[escalated_to_human]
   end
   subgraph W4[04 Refund escalation]
     H[Evaluate threshold and options] --> SL[Slack approval card] --> LG[(Ledger)]
   end
-  U & I & RO & ES --> W5[05 Reconciliation + CSAT follow-up]
+  U & RO --> W5[05 Reconciliation + CSAT follow-up]
   Z[Any failure] -.-> DLQ[Error workflow: DLQ + alert]
 ```
 
@@ -78,11 +86,11 @@ flowchart TD
 
 | # | Workflow | What it does | Why it is built this way |
 |---|---|---|---|
-| 01 | **Intake and LTV matcher** | Validates a secret header, normalises the payload (channel, email, order number found in the message if not supplied, attachment flag), checks the fraud blacklist, loads customer and order, classifies intent and sentiment, writes a ticket, acknowledges, routes. | Cheap, deterministic checks run first; the LLM runs only for legitimate traffic. |
-| 02 | **Address resolver** | Builds the proposed address from the customer's correction, geocodes it through Nominatim, then branches on fulfilment status. | Changing an address on a shipped order is not an edit, it is a carrier problem, so the workflow treats the two cases differently. |
-| 03 | **Vision damage engine** | Inspects the claim photo against a severity rubric and returns typed findings; a three-part rule decides replace or escalate. | Only unambiguous, cheap cases are automated; ambiguity is a human's job. |
+| 01 | **Intake and LTV matcher** | Validates a secret header, normalises the payload (channel, email, order number found in the message if not supplied, attachment flag), checks the fraud blacklist, loads customer and order, classifies intent and sentiment, writes a ticket (the number comes from a database sequence), acknowledges, routes. Order-status questions get a reply built from the order record; everything with no automated handler is handed to a person. | Cheap, deterministic checks run first; the LLM runs only for legitimate traffic. |
+| 02 | **Address resolver** | Builds the proposed address from the customer's correction and geocodes it through Nominatim (city, state and ZIP only, not the street). A failed or empty match leaves the order unchanged and asks the customer to confirm; otherwise it branches on fulfilment status. | Changing an address on a shipped order is not an edit, it is a carrier problem, so the workflow treats the two cases differently. |
+| 03 | **Vision damage engine** | Escalates straight away if there is no photo; otherwise downloads the photo, sends it to a pinned vision model as image data, and gets typed findings against a severity rubric. A three-part rule decides replace or escalate. | Only unambiguous, cheap cases are automated; ambiguity is a human's job. |
 | 04 | **High-value escalation** | Computes the reason for escalation and the options (including store credit at 120% of order value) and posts a Slack approval card. | Money decisions above a threshold need a named human. |
-| 05 | **Reconciliation** | Records resolution metrics and a CSAT follow-up into an operations hub. | Automation needs a feedback loop or nobody knows whether it is working. |
+| 05 | **Reconciliation** | Records resolution metrics (measured time from ticket creation to resolution) and a CSAT follow-up into an operations hub. | Automation needs a feedback loop or nobody knows whether it is working. |
 | - | **Error handler** | Logs failures to a dead-letter table and alerts DevOps. | Unattended systems must say when they break. |
 
 ---
@@ -153,6 +161,9 @@ Every workflow writes its outcome back to `support_tickets` with a status (`auto
 | Bad or missing secret | `401`, nothing else runs |
 | Blacklisted customer | Dropped quietly, no lookups, no LLM cost |
 | Order already shipped | Address change becomes a carrier-intercept request for a human |
+| Address cannot be geocoded | Order left unchanged, ticket marked `awaiting_customer`, customer asked to confirm |
+| Damage claim with no photo | Escalated for human review, no model call |
+| Order-status request for an unknown order, or any other intent | Handed to a person, ticket `escalated_to_human` |
 | Damage claim is ambiguous or high value | Escalated with the model's reasoning, never auto-approved |
 | Any refund request | Slack approval card stating the reason (over $100, or a frustrated or hostile customer); no automatic payout |
 | Any workflow throws | Error workflow logs it and alerts DevOps |
@@ -189,23 +200,47 @@ What this shows:
 - A confident wrong answer in the safe direction (`no_damage`) only escalates to a human under the fast-path rule, which is why that rule requires damage to be detected. A wrong answer in the other direction is the case worth a larger test.
 - One of the free models I tried was rate-limited, which is the practical limit of free tiers.
 
+### Live runs through the intake webhook (after the fixes)
+
+These went through the real webhook on my n8n instance against seeded orders, and I read the ticket rows afterwards.
+
+| Case | Result |
+|---|---|
+| Order-status question for an unfulfilled order | Ticket `auto_resolved`, `order_status_reply_prepared`, 0 s |
+| Address correction ("Apt 4B") on an unfulfilled order | Geocoder matched, order updated, ticket `auto_resolved`, 1 s |
+| Damage claim with no photo | `escalated_for_human_review`, reason "no photo supplied" |
+| General question (shipping and returns policy) | `human_handoff`, ticket `escalated_to_human` |
+| Damage claim with a photo of blister packs | Photo downloaded as a 79 KB JPEG and sent as binary to the pinned model; it answered `no_damage` at 98 confidence and described the photo accurately; the claim was escalated, as the rule requires |
+
+Two things this found that I would otherwise have missed: the first pinned vision model had been retired by the provider (a 404 on every claim), and the node's default output limit was larger than my account balance allowed (a 402). I capped output at 800 tokens, which is plenty for the typed result.
+
+Not run live: the geocode-failure path, the shipped-order intercept, the refund-to-Slack path with the router, and a genuine damage photo going down the fast path. The photo-handling change was checked on one photo, so it is not an accuracy measurement.
+
 Other checks:
 - [`samples/support-intake.json`](samples/support-intake.json) is a ready payload.
 - Cases worth running: a damage claim under $100 (should replace), the same claim over $100 (should escalate), an address change on an unfulfilled and on a shipped order, a blacklisted email, a wrong secret.
 - Pending: a labelled set of about 30 photos and messages to report real accuracy.
 
-## What I would fix next
+## What I fixed, and what is still open
 
-Findings from auditing my own build, in priority order:
+I audited my own build and wrote down eight findings. This is where each one stands.
 
-1. **Download the photo and send it as image data, not a remote URL.** The vision step passes a URL to the provider, which has to fetch it itself. In my tests that was the weak point (see Testing). Add an HTTP Request node that downloads the photo, and send it to the model as binary or a base64 data URL. Also pin a specific vision-capable model instead of a free router that can change underneath me.
-2. **`ORDER_STATUS` and `GENERAL_INQUIRY` have no branch.** They are classified and logged, then nothing happens. They need a status-lookup reply and a human handoff.
-3. **The geocoder result does not gate the update.** The address resolver calls Nominatim, but the next decision only checks fulfilment status. A failed or ambiguous geocode should block the update and ask the customer.
-4. **Reconciliation metrics are partly assumed.** The reconciliation step falls back to constants (for example a 12-second resolution time) when real timings are absent, so any ROI figure it produces is an estimate, not a measurement. I would record real timestamps.
-5. **Refund approval depends on the shared interactions router.** The router lives in the [incident platform repo](https://github.com/lomonol/n8n-ai-incident-escalation-platform); the dependency should be documented in the workflow and tested end to end.
-6. **Secrets in nodes.** The shared secret was a literal in an IF node. Move it to credentials. (Stripped from this export.)
-7. **Ticket numbers are random.** `TCK-YYYY-` plus four random digits can collide; use a sequence.
-8. **Demo defaults in code.** A few expressions fall back to placeholder customer names and a fixed product line in notice text. Fine for a demo, wrong for production.
+| # | Finding | Status |
+|---|---|---|
+| 1 | Send the photo as image data, and pin a vision model | **Fixed.** An HTTP Request node downloads the photo, the model receives binary image data, and the model is pinned (`google/gemini-2.5-flash` via OpenRouter, 800-token output cap). Checked on one photo. |
+| 2 | `ORDER_STATUS` and `GENERAL_INQUIRY` had no branch | **Fixed.** Status gets a reply from the order record; unknown orders and everything else go to a person. |
+| 3 | Geocoder result did not gate the update | **Fixed, with a limit.** A failed or empty match blocks the update. The lookup uses city, state and ZIP, so it catches bad localities but does not validate the street. |
+| 4 | Reconciliation metrics partly assumed | **Partly fixed.** Resolution time is now measured from ticket creation, and the 12-second fallback is gone. The 12-hour human baseline and the per-intent dollar savings are still assumptions, so any "time saved" or "cost saved" figure is an estimate. |
+| 5 | Refund approval depends on the shared router | **Documented, not tested.** A note on the workflow explains the dependency; I have not run a refund through to a Slack button click. |
+| 6 | Secrets in nodes | **Partly fixed.** The Slack token now comes from an n8n credential. The intake shared secret is still a literal in an IF node (stripped from this export); it should become a Header Auth credential on the webhook. |
+| 7 | Ticket numbers were random | **Fixed.** A database sequence fills them (`sql/ticket-number-sequence.sql`). |
+| 8 | Demo defaults in code | **Fixed.** The default photo, placeholder customer name and fixed product text are gone. |
+
+Still open:
+- **A dead photo URL fails the run.** If the download fails, the workflow errors into the dead-letter queue instead of escalating the claim.
+- **Notices are formatted, not sent.** Customer messages are built and logged by Set nodes; there is no email or chat send step in this build.
+- **No accuracy measurement.** A labelled set of about 30 photos and messages is still needed before any accuracy claim.
+- **The fast-path replacement branch** has not been run live with a genuine damage photo since the changes.
 
 ## Configuration and swap-ins
 
@@ -214,7 +249,7 @@ Everything below is a setting or a node swap, not a rewrite. The defaults are wh
 | What | Default here | Change it to |
 |---|---|---|
 | **Intent LLM** | OpenRouter free router | Any chat model. |
-| **Vision model** | OpenRouter free router | Any vision-capable model (GPT-4o class, Claude, Gemini, a local LLaVA-style model). Pinning one specific model gives consistent results; a router can change underneath you. |
+| **Vision model** | Pinned `google/gemini-2.5-flash` via OpenRouter, 800-token output cap | Any vision-capable model (GPT-4o class, Claude, Gemini, a local LLaVA-style model). Pin one specific model for consistent results, and re-check it is still served: my first pin was retired by the provider. |
 | **Fast-path rule** | Damage detected, confidence at least 60, order value at most $100 | Any thresholds, or add conditions such as customer tier or number of prior claims. One IF node. |
 | **Refund escalation** | Above $100, or a frustrated or hostile customer | Any threshold. Store credit is offered at 120% of order value; change the multiplier. |
 | **Fraud list** | Supabase table | Any lookup, or a fraud service API. |
@@ -244,16 +279,17 @@ Everything below is a setting or a node swap, not a rewrite. The defaults are wh
 | [`workflows/05-ops-reconciliation-csat.json`](workflows/05-ops-reconciliation-csat.json) | Resolution metrics and CSAT follow-up |
 | [`workflows/06-error-handler-dlq.json`](workflows/06-error-handler-dlq.json) | Global error handler |
 | [`samples/support-intake.json`](samples/support-intake.json) | Sample request payload |
+| [`sql/ticket-number-sequence.sql`](sql/ticket-number-sequence.sql) | Sequence and default for ticket numbers |
 
 ### Run it yourself
 1. Import the six workflows into n8n. All are exported **inactive**.
 2. Replace every placeholder (`REPLACE_ME`, `YOUR_*`, `WORKFLOW_ID_*`), re-select credentials, and re-link the Execute Workflow nodes and the Error workflow setting to your imported copies.
-3. Create the five Supabase tables and the Airtable operations hub. Import the interactions router from the incident repo for Slack buttons.
-4. Send the sample payload:
+3. Create the five Supabase tables, then run [`sql/ticket-number-sequence.sql`](sql/ticket-number-sequence.sql) for sequential ticket numbers. Create the Airtable operations hub, and a Header Auth credential for the Slack bot token (`Authorization: Bearer ...`). Import the interactions router from the incident repo for Slack buttons.
+4. Edit the sample so `attachments` holds a public image URL (the placeholder in it does not resolve), then send it:
 
    ```bash
    curl -X POST https://YOUR-N8N-HOST/webhook/support-intake \
-     -H "x-lumina-secret-key: YOUR_SHARED_SECRET" \
+     -H "X-Lumina-Secret-Key: YOUR_SHARED_SECRET" \
      -H "Content-Type: application/json" \
      -d @samples/support-intake.json
    ```

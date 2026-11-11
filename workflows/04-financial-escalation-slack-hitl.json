@@ -55,7 +55,7 @@
             {
               "id": "hitl-name",
               "name": "customer_name",
-              "value": "={{ $json.customer_name || ($json.first_name ? $json.first_name + ' ' + ($json.last_name || '') : 'Sarah Jenkins') }}",
+              "value": "={{ $json.customer_name || ($json.first_name ? $json.first_name + ' ' + ($json.last_name || '') : $json.customer_email) }}",
               "type": "string"
             },
             {
@@ -132,10 +132,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "Authorization",
-              "value": "Bearer YOUR_SLACK_BOT_TOKEN"
-            },
-            {
               "name": "Content-Type",
               "value": "application/json; charset=utf-8"
             }
@@ -143,7 +139,15 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{\n  JSON.stringify({\n    channel: \"C0CDJNJAFQS\",\n    text: \"🚨 VIP ESCALATION: \" + $json.order_number + \" ($\" + $json.order_value + \") - \" + $json.customer_name,\n    blocks: [\n      {\n        type: \"header\",\n        text: {\n          type: \"plain_text\",\n          text: \"🚨 VIP FINANCIAL ESCALATION: \" + $json.order_number,\n          emoji: true\n        }\n      },\n      {\n        type: \"section\",\n        fields: [\n          {\n            type: \"mrkdwn\",\n            text: \"*Customer:*\\n\" + $json.customer_name + \" (<mailto:\" + $json.customer_email + \"|\" + $json.customer_email + \">)\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*LTV Tier:*\\n⭐ \" + $json.ltv_tier.toUpperCase() + \" ($\" + $json.total_spend.toLocaleString() + \" across \" + $json.order_count + \" orders)\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Claim Amount:*\\n💰 $\" + $json.order_value.toFixed(2) + \" USD\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Sentiment & Urgency:*\\n⚠️ \" + $json.sentiment.toUpperCase() + \" / \" + $json.urgency.toUpperCase()\n          }\n        ]\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Trigger Reason:*\\n`\" + $json.escalation_reason + \"`\"\n        }\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Customer Stated:*\\n> \\\"\" + ($json.raw_message || \"\").replace(/\"/g, '\\\\\"') + \"\\\"\"\n        }\n      },\n      {\n        type: \"divider\"\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Executive Action Required:* Select an approved resolution below to execute immediately:\"\n        }\n      },\n      {\n        type: \"actions\",\n        block_id: \"lumina_resolution_actions\",\n        elements: [\n          {\n            type: \"button\",\n            text: {\n              type: \"plain_text\",\n              text: \"💳 Approve $\" + $json.order_value.toFixed(2) + \" Refund\",\n              emoji: true\n            },\n            style: \"danger\",\n            action_id: \"lumina_refund_full\",\n            value: \"lumina_refund_full|\" + $json.ticket_id + \"|\" + $json.order_number + \"|\" + $json.order_value.toFixed(2)\n          },\n          {\n            type: \"button\",\n            text: {\n              type: \"plain_text\",\n              text: \"🎁 Offer $\" + $json.store_credit_amount + \" Store Credit (+20%)\",\n              emoji: true\n            },\n            style: \"primary\",\n            action_id: \"lumina_credit_120\",\n            value: \"lumina_credit_120|\" + $json.ticket_id + \"|\" + $json.order_number + \"|\" + $json.store_credit_amount\n          }\n        ]\n      }\n    ]\n  })\n}}"
+        "jsonBody": "={{\n  JSON.stringify({\n    channel: \"YOUR_SLACK_CHANNEL_ID\",\n    text: \"🚨 VIP ESCALATION: \" + $json.order_number + \" ($\" + $json.order_value + \") - \" + $json.customer_name,\n    blocks: [\n      {\n        type: \"header\",\n        text: {\n          type: \"plain_text\",\n          text: \"🚨 VIP FINANCIAL ESCALATION: \" + $json.order_number,\n          emoji: true\n        }\n      },\n      {\n        type: \"section\",\n        fields: [\n          {\n            type: \"mrkdwn\",\n            text: \"*Customer:*\\n\" + $json.customer_name + \" (<mailto:\" + $json.customer_email + \"|\" + $json.customer_email + \">)\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*LTV Tier:*\\n⭐ \" + $json.ltv_tier.toUpperCase() + \" ($\" + $json.total_spend.toLocaleString() + \" across \" + $json.order_count + \" orders)\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Claim Amount:*\\n💰 $\" + $json.order_value.toFixed(2) + \" USD\"\n          },\n          {\n            type: \"mrkdwn\",\n            text: \"*Sentiment & Urgency:*\\n⚠️ \" + $json.sentiment.toUpperCase() + \" / \" + $json.urgency.toUpperCase()\n          }\n        ]\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Trigger Reason:*\\n`\" + $json.escalation_reason + \"`\"\n        }\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Customer Stated:*\\n> \\\"\" + ($json.raw_message || \"\").replace(/\"/g, '\\\\\"') + \"\\\"\"\n        }\n      },\n      {\n        type: \"divider\"\n      },\n      {\n        type: \"section\",\n        text: {\n          type: \"mrkdwn\",\n          text: \"*Executive Action Required:* Select an approved resolution below to execute immediately:\"\n        }\n      },\n      {\n        type: \"actions\",\n        block_id: \"lumina_resolution_actions\",\n        elements: [\n          {\n            type: \"button\",\n            text: {\n              type: \"plain_text\",\n              text: \"💳 Approve $\" + $json.order_value.toFixed(2) + \" Refund\",\n              emoji: true\n            },\n            style: \"danger\",\n            action_id: \"lumina_refund_full\",\n            value: \"lumina_refund_full|\" + $json.ticket_id + \"|\" + $json.order_number + \"|\" + $json.order_value.toFixed(2)\n          },\n          {\n            type: \"button\",\n            text: {\n              type: \"plain_text\",\n              text: \"🎁 Offer $\" + $json.store_credit_amount + \" Store Credit (+20%)\",\n              emoji: true\n            },\n            style: \"primary\",\n            action_id: \"lumina_credit_120\",\n            value: \"lumina_credit_120|\" + $json.ticket_id + \"|\" + $json.order_number + \"|\" + $json.store_credit_amount\n          }\n        ]\n      }\n    ]\n  })\n}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Slack Bot Token"
+        }
       }
     },
     {
@@ -259,6 +263,21 @@
           ]
         }
       }
+    },
+    {
+      "id": "cb4d0fcd-c3b9-4364-95c6-5eba5eac4a08",
+      "name": "Note: Approval Router Dependency",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        440,
+        -260
+      ],
+      "parameters": {
+        "width": 420,
+        "height": 200,
+        "content": "## Depends on the shared interactions router\nThe Approve / Offer-credit buttons on the Slack card carry an action_id (lumina_refund_full, lumina_credit_120). The click is handled by the shared interactions router workflow (published in the incident-platform repo), NOT by this workflow. If the router is inactive or its Slack Request URL is wrong, the card posts but the buttons do nothing and the ticket stays escalated_to_human.\n\nTest end to end: send a refund request over $100 to the intake webhook, click a button in Slack, then check the ticket and order rows."
+      }
     }
   ],
   "connections": {
@@ -310,7 +329,7 @@
   "settings": {
     "executionOrder": "v1",
     "availableInMCP": true,
-    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-queue-dl"
   },
   "active": false
 }

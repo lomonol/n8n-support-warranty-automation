@@ -85,7 +85,7 @@
             {
               "id": "claim-img",
               "name": "image_url",
-              "value": "={{ ($json.attachments && $json.attachments[0]?.url) || $json.image_url || \"https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=60\" }}",
+              "value": "={{ (() => { const a = ($json.attachments || [])[0]; return (typeof a === 'string' ? a : a?.url) || $json.image_url || ''; })() }}",
               "type": "string"
             },
             {
@@ -115,7 +115,7 @@
       ],
       "parameters": {
         "promptType": "define",
-        "text": "=CUSTOMER DAMAGE REPORT:\nCustomer Email: {{ $json.customer_email }}\nReferenced Order: {{ $json.order_number }}\nPurchased Items: {{ JSON.stringify($json.items) }}\nOrder Value: ${{ $json.order_value }}\nCustomer Complaint:\n\"{{ $json.raw_message }}\"\n\nIMAGE EVIDENCE ATTACHMENT:\nPhoto URL: {{ $json.image_url }}\n\nPlease inspect the attached photo evidence and evaluate against customer complaint.",
+        "text": "=CUSTOMER DAMAGE REPORT:\nCustomer Email: {{ $('Parse Claim & Normalize Attachments').item.json.customer_email }}\nReferenced Order: {{ $('Parse Claim & Normalize Attachments').item.json.order_number }}\nPurchased Items: {{ JSON.stringify($('Parse Claim & Normalize Attachments').item.json.items) }}\nOrder Value: ${{ $('Parse Claim & Normalize Attachments').item.json.order_value }}\nCustomer Complaint:\n\"{{ $('Parse Claim & Normalize Attachments').item.json.raw_message }}\"\n\nThe photo evidence is attached as an image. Please inspect it and evaluate it against the customer complaint.",
         "hasOutputParser": true,
         "messages": {
           "messageValues": [
@@ -124,10 +124,10 @@
               "type": "SystemMessagePromptTemplate"
             },
             {
-              "imageDetail": "auto",
-              "imageUrl": "={{ $json.image_url }}",
-              "messageType": "imageUrl",
-              "type": "HumanMessagePromptTemplate"
+              "type": "HumanMessagePromptTemplate",
+              "messageType": "imageBinary",
+              "binaryImageDataKey": "data",
+              "imageDetail": "auto"
             }
           ]
         }
@@ -143,9 +143,10 @@
         336
       ],
       "parameters": {
-        "model": "openrouter/free",
+        "model": "google/gemini-2.5-flash",
         "options": {
-          "temperature": 0.1
+          "temperature": 0.1,
+          "maxTokens": 800
         }
       },
       "credentials": {
@@ -376,7 +377,7 @@
             },
             {
               "fieldId": "resolution_time_seconds",
-              "fieldValue": "12"
+              "fieldValue": "={{ $('Execute Workflow Trigger').item.json.ticket_created_at ? Math.round(($now.toMillis() - new Date($('Execute Workflow Trigger').item.json.ticket_created_at).getTime()) / 1000) : null }}"
             },
             {
               "fieldId": "ai_response",
@@ -427,14 +428,14 @@
             {
               "id": "repl-body",
               "name": "message_body",
-              "value": "={{ \"Hi there,\\n\\nWe are so sorry your Nordic diffuser arrived damaged! Our autonomous vision engine inspected your photo, verified the cracked ceramic defect, and approved your replacement claim immediately.\\n\\nYour replacement order \" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-R1 has been entered into our warehouse fulfillment queue and will depart via FedEx within 24 hours.\\n\\nYou can download your prepaid return label to return the broken unit at:\\n\" + \"https://returns.example.com/labels/\" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-RETURN.pdf\\n\\nThank you for choosing Lumina Goods Co.!\" }}",
+              "value": "={{ \"Hi there,\\n\\nWe are so sorry your item arrived damaged. Our vision engine inspected your photo (\" + $(\"Multi-Modal Vision Inspection\").item.json.output.item_description + \") and approved your replacement claim.\\n\\nYour replacement order \" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-R1 has been entered into our warehouse fulfillment queue.\\n\\nYou can download your prepaid return label at:\\nhttps://returns.example.com/labels/\" + $(\"Parse Claim & Normalize Attachments\").item.json.order_number + \"-RETURN.pdf\\n\\nThank you for choosing Lumina Goods Co.!\" }}",
               "type": "string"
             },
             {
               "id": "repl-time",
               "name": "resolution_time_seconds",
-              "value": 12,
-              "type": "number"
+              "type": "number",
+              "value": "={{ $('Execute Workflow Trigger').item.json.ticket_created_at ? Math.round(($now.toMillis() - new Date($('Execute Workflow Trigger').item.json.ticket_created_at).getTime()) / 1000) : null }}"
             }
           ]
         }
@@ -469,11 +470,11 @@
             },
             {
               "fieldId": "action_executed",
-              "fieldValue": "escalated_to_slack_hitl"
+              "fieldValue": "escalated_for_human_review"
             },
             {
               "fieldId": "ai_response",
-              "fieldValue": "={{ \"Damage claim requires human manager review. Reason: \" + ($(\"Parse Claim & Normalize Attachments\").item.json.order_value > 100 ? \"High-value threshold ($\" + $(\"Parse Claim & Normalize Attachments\").item.json.order_value + \" > $100)\" : \"Visual audit ambiguity\") + \". Dispatched to Slack #ops-approvals.\" }}"
+              "fieldValue": "={{ \"Damage claim queued for human review. Reason: \" + (!$(\"Parse Claim & Normalize Attachments\").item.json.image_url ? \"no photo supplied\" : ($(\"Parse Claim & Normalize Attachments\").item.json.order_value > 100 ? \"high-value threshold ($\" + $(\"Parse Claim & Normalize Attachments\").item.json.order_value + \" > $100)\" : \"visual audit found no damage or low confidence\")) + \".\" }}"
             }
           ]
         }
@@ -541,9 +542,9 @@
         "workflowId": {
           "__rl": true,
           "cachedResultName": "ENT-03: 05 - Operations Reconciliation & Automated CSAT Follow-Up",
-          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-05-operations-reconciliation-auto",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-05-operations-reconciliation-automated-cs",
           "mode": "list",
-          "value": "WORKFLOW_ID_ent-03-05-operations-reconciliation-auto"
+          "value": "WORKFLOW_ID_ent-03-05-operations-reconciliation-automated-cs"
         },
         "workflowInputs": {
           "attemptToConvertTypes": false,
@@ -556,11 +557,67 @@
             "customer_email": "={{ $('Parse Claim & Normalize Attachments').item.json.customer_email }}",
             "intent": "damaged_item",
             "order_number": "={{ $('Parse Claim & Normalize Attachments').item.json.order_number }}",
-            "resolution_time_seconds": 12,
+            "resolution_time_seconds": "={{ $('Format Replacement Notice').item.json.resolution_time_seconds }}",
             "ticket_id": "={{ $('Parse Claim & Normalize Attachments').item.json.ticket_id }}",
             "ticket_number": "={{ $('Parse Claim & Normalize Attachments').item.json.ticket_number }}"
           }
         }
+      }
+    },
+    {
+      "id": "af59db47-902b-4ec5-a58e-83379f700adc",
+      "name": "Download Damage Photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $json.image_url }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "981db4db-c305-4265-bf81-310b41213f4c",
+      "name": "Has Photo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        336,
+        112
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "has-photo",
+              "leftValue": "={{ $json.image_url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       }
     }
   ],
@@ -570,17 +627,6 @@
         [
           {
             "node": "Parse Claim & Normalize Attachments",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Claim & Normalize Attachments": {
-      "main": [
-        [
-          {
-            "node": "Multi-Modal Vision Inspection",
             "type": "main",
             "index": 0
           }
@@ -692,12 +738,52 @@
           }
         ]
       ]
+    },
+    "Download Damage Photo": {
+      "main": [
+        [
+          {
+            "node": "Multi-Modal Vision Inspection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Claim & Normalize Attachments": {
+      "main": [
+        [
+          {
+            "node": "Has Photo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Photo?": {
+      "main": [
+        [
+          {
+            "node": "Download Damage Photo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Escalation in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
     "availableInMCP": true,
-    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-queue-dl"
   },
   "active": false
 }

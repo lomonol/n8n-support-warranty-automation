@@ -67,7 +67,7 @@
             {
               "id": "recon-secs",
               "name": "resolution_time_seconds",
-              "value": "={{ Number($json.resolution_time_seconds || 12) }}",
+              "value": "={{ ($json.resolution_time_seconds !== undefined && $json.resolution_time_seconds !== null && $json.resolution_time_seconds !== '') ? Number($json.resolution_time_seconds) : null }}",
               "type": "number"
             },
             {
@@ -79,7 +79,7 @@
             {
               "id": "recon-mins",
               "name": "time_saved_minutes",
-              "value": "={{ Math.round((43200 - Number($json.resolution_time_seconds || 12)) / 60) }}",
+              "value": "={{ ($json.resolution_time_seconds !== undefined && $json.resolution_time_seconds !== null && $json.resolution_time_seconds !== '') ? Math.round((43200 - Number($json.resolution_time_seconds)) / 60) : null }}",
               "type": "number"
             },
             {
@@ -181,7 +181,7 @@
             {
               "id": "csat-msg",
               "name": "follow_up_message",
-              "value": "={{ \"Hi there,\\n\\nElena from Lumina Goods Co. here following up on your recent support inquiry regarding Order \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.order_number + \" (Ticket \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.ticket_number + \").\\n\\nOur autonomous engine resolved your request in \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.resolution_time_seconds + \" seconds! We want to ensure everything was handled to your complete satisfaction.\\n\\nPlease rate your experience: [ ⭐⭐⭐⭐⭐ Excellent ] [ ⭐⭐⭐ Satisfactory ] [ ⭐ Needs Improvement ]\\n\\nThank you for choosing Lumina Goods Co.!\" }}",
+              "value": "={{ \"Hi there,\\n\\nWe are following up on your recent support inquiry regarding Order \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.order_number + \" (Ticket \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.ticket_number + \").\" + ($(\"Calculate Operations ROI & CSAT Metrics\").item.json.resolution_time_seconds !== null ? \" It was resolved in \" + $(\"Calculate Operations ROI & CSAT Metrics\").item.json.resolution_time_seconds + \" seconds.\" : \"\") + \" We want to be sure everything was handled to your satisfaction.\\n\\nPlease rate your experience: [ Excellent ] [ Satisfactory ] [ Needs Improvement ]\\n\\nThank you for choosing Lumina Goods Co.\" }}",
               "type": "string"
             },
             {
@@ -304,7 +304,7 @@
   "settings": {
     "executionOrder": "v1",
     "availableInMCP": true,
-    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-queue-dl"
   },
   "active": false
 }

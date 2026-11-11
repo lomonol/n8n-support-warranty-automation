@@ -332,10 +332,6 @@
         "fieldsUi": {
           "fieldValues": [
             {
-              "fieldId": "ticket_number",
-              "fieldValue": "={{ 'TCK-' + $now.format('yyyy') + '-' + Math.floor(1000 + Math.random() * 9000) }}"
-            },
-            {
               "fieldId": "order_id",
               "fieldValue": "={{ $('Lookup Order Details').item.json.id || null }}"
             },
@@ -478,11 +474,37 @@
               },
               "renameOutput": true,
               "outputKey": "Financial Escalation / Refund"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "e5b7c1d2-0a11-4c3e-9a55-orderstatus01",
+                    "leftValue": "={{ $('Classify Intent & Sentiment').item.json.output.intent }}",
+                    "rightValue": "ORDER_STATUS",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Order Status"
             }
           ]
         },
         "options": {
-          "fallbackOutput": "extra"
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "General Inquiry / Other"
         }
       },
       "type": "n8n-nodes-base.switch",
@@ -498,9 +520,9 @@
       "parameters": {
         "workflowId": {
           "__rl": true,
-          "value": "WORKFLOW_ID_ent-03-02-pre-fulfillment-logistics-real",
+          "value": "WORKFLOW_ID_ent-03-02-pre-fulfillment-logistics-real-time-ad",
           "mode": "list",
-          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-02-pre-fulfillment-logistics-real",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-02-pre-fulfillment-logistics-real-time-ad",
           "cachedResultName": "ENT-03: 02 - Pre-Fulfillment Logistics & Real-Time Address Resolver"
         },
         "workflowInputs": {
@@ -513,7 +535,8 @@
             "order_number": "={{ $('Normalize Inbound Payload').item.json.order_number }}",
             "shipping_address": "={{ $('Lookup Order Details').item.json.shipping_address || {} }}",
             "ticket_number": "={{ $('Log Ticket in Ledger').item.json.ticket_number }}",
-            "tracking_number": "={{ $('Lookup Order Details').item.json.tracking_number || '' }}"
+            "tracking_number": "={{ $('Lookup Order Details').item.json.tracking_number || '' }}",
+            "ticket_created_at": "={{ $('Log Ticket in Ledger').item.json.created_at }}"
           },
           "matchingColumns": [],
           "schema": [],
@@ -545,9 +568,9 @@
         "workflowId": {
           "__rl": true,
           "cachedResultName": "ENT-03: 03 - Multi-Modal Vision Damage & Warranty Engine",
-          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-03-multi-modal-vision-damage-warr",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-03-multi-modal-vision-damage-warranty-eng",
           "mode": "list",
-          "value": "WORKFLOW_ID_ent-03-03-multi-modal-vision-damage-warr"
+          "value": "WORKFLOW_ID_ent-03-03-multi-modal-vision-damage-warranty-eng"
         },
         "workflowInputs": {
           "attemptToConvertTypes": false,
@@ -559,7 +582,7 @@
             "channel": "={{ $('Normalize Inbound Payload').item.json.channel }}",
             "currency": "={{ $('Lookup Order Details').item.json.currency || 'USD' }}",
             "customer_email": "={{ $('Normalize Inbound Payload').item.json.customer_email }}",
-            "image_url": "={{ $('Inbound Support Webhook').item.json.body?.attachments?.[0]?.url || 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=60' }}",
+            "image_url": "={{ (() => { const a = $('Inbound Support Webhook').item.json.body?.attachments?.[0]; return (typeof a === 'string' ? a : a?.url) || ''; })() }}",
             "items": "={{ $('Lookup Order Details').item.json.items || [] }}",
             "order_id": "={{ $('Lookup Order Details').item.json.id }}",
             "order_number": "={{ $('Normalize Inbound Payload').item.json.order_number }}",
@@ -567,7 +590,8 @@
             "shipping_address": "={{ $('Lookup Order Details').item.json.shipping_address || {} }}",
             "ticket_id": "={{ $('Log Ticket in Ledger').item.json.id }}",
             "ticket_number": "={{ $('Log Ticket in Ledger').item.json.ticket_number }}",
-            "total_amount": "={{ $('Lookup Order Details').item.json.total_amount || 0 }}"
+            "total_amount": "={{ $('Lookup Order Details').item.json.total_amount || 0 }}",
+            "ticket_created_at": "={{ $('Log Ticket in Ledger').item.json.created_at }}"
           }
         }
       },
@@ -587,9 +611,9 @@
         "workflowId": {
           "__rl": true,
           "cachedResultName": "ENT-03: 04 - High-Value Financial Escalation & Interactive Slack HITL",
-          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-04-high-value-financial-escalatio",
+          "cachedResultUrl": "/workflow/WORKFLOW_ID_ent-03-04-high-value-financial-escalation-intera",
           "mode": "list",
-          "value": "WORKFLOW_ID_ent-03-04-high-value-financial-escalatio"
+          "value": "WORKFLOW_ID_ent-03-04-high-value-financial-escalation-intera"
         },
         "workflowInputs": {
           "attemptToConvertTypes": false,
@@ -599,7 +623,7 @@
           "schema": [],
           "value": {
             "customer_email": "={{ $('Normalize Inbound Payload').item.json.customer_email }}",
-            "customer_name": "={{ ($('Lookup Customer Profile').item.json.first_name ? $('Lookup Customer Profile').item.json.first_name + ' ' + ($('Lookup Customer Profile').item.json.last_name || '') : 'Sarah Jenkins') }}",
+            "customer_name": "={{ $('Lookup Customer Profile').item.json.first_name ? $('Lookup Customer Profile').item.json.first_name + ' ' + ($('Lookup Customer Profile').item.json.last_name || '') : $('Normalize Inbound Payload').item.json.customer_email }}",
             "items": "={{ $('Lookup Order Details').item.json.items || [] }}",
             "ltv_tier": "={{ $('Lookup Customer Profile').item.json.ltv_tier || 'standard' }}",
             "order_count": "={{ $('Lookup Customer Profile').item.json.order_count || 1 }}",
@@ -615,6 +639,216 @@
         }
       },
       "disabled": false
+    },
+    {
+      "id": "c7c0b3ff-d533-413f-937b-a5e3ec312cd4",
+      "name": "Order Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        2592,
+        560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ord-found",
+              "leftValue": "={{ $('Lookup Order Details').item.json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "94cc28c5-74a7-4e86-9a9c-417dd86850ad",
+      "name": "Log Status Reply in Ticket Ledger",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2816,
+        480
+      ],
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_tickets",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "ticket_number",
+              "keyValue": "={{ $('Log Ticket in Ledger').item.json.ticket_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "auto_resolved"
+            },
+            {
+              "fieldId": "action_executed",
+              "fieldValue": "order_status_reply_prepared"
+            },
+            {
+              "fieldId": "resolution_time_seconds",
+              "fieldValue": "={{ Math.round(($now.toMillis() - new Date($('Log Ticket in Ledger').item.json.created_at).getTime()) / 1000) }}"
+            },
+            {
+              "fieldId": "ai_response",
+              "fieldValue": "={{ 'Order status reply prepared from the order record (status: ' + $('Lookup Order Details').item.json.fulfillment_status + ').' }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "id": "4d6adc3b-824d-4702-a252-1f107605fab0",
+      "name": "Format Status Reply",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3040,
+        480
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "st-status",
+              "name": "dispatch_status",
+              "value": "prepared",
+              "type": "string"
+            },
+            {
+              "id": "st-email",
+              "name": "customer_email",
+              "value": "={{ $('Normalize Inbound Payload').item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "st-sub",
+              "name": "subject",
+              "value": "={{ 'Order ' + $('Normalize Inbound Payload').item.json.order_number + ': where it is now' }}",
+              "type": "string"
+            },
+            {
+              "id": "st-body",
+              "name": "message_body",
+              "value": "={{ 'Hi there,\\n\\nOrder ' + $('Normalize Inbound Payload').item.json.order_number + ' is currently: ' + $('Lookup Order Details').item.json.fulfillment_status + '.' + ($('Lookup Order Details').item.json.tracking_number ? ' It is travelling with ' + ($('Lookup Order Details').item.json.carrier || 'the carrier') + ', tracking number ' + $('Lookup Order Details').item.json.tracking_number + '.' : ' It has not shipped yet; we will send tracking as soon as it leaves the warehouse.') + '\\n\\nReply to this email if anything looks wrong.' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "2fc0dbf7-8a3e-4f30-a498-05dc9b3b92c3",
+      "name": "Log Human Handoff in Ticket Ledger",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2816,
+        640
+      ],
+      "parameters": {
+        "operation": "update",
+        "tableId": "support_tickets",
+        "filters": {
+          "conditions": [
+            {
+              "condition": "eq",
+              "keyName": "ticket_number",
+              "keyValue": "={{ $('Log Ticket in Ledger').item.json.ticket_number }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "escalated_to_human"
+            },
+            {
+              "fieldId": "action_executed",
+              "fieldValue": "human_handoff"
+            },
+            {
+              "fieldId": "ai_response",
+              "fieldValue": "={{ 'No automated handler for this request (intent: ' + $('Classify Intent & Sentiment').item.json.output.intent + ', order found: ' + ($('Lookup Order Details').item.json.id ? 'yes' : 'no') + '). Handed to a person.' }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "REPLACE_ME",
+          "name": "ENT-03"
+        }
+      }
+    },
+    {
+      "id": "6f0a2bac-011d-4513-bfa5-a67c1c5c725e",
+      "name": "Format Handoff Notice",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        3040,
+        640
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ho-status",
+              "name": "dispatch_status",
+              "value": "handed_to_human",
+              "type": "string"
+            },
+            {
+              "id": "ho-email",
+              "name": "customer_email",
+              "value": "={{ $('Normalize Inbound Payload').item.json.customer_email }}",
+              "type": "string"
+            },
+            {
+              "id": "ho-sub",
+              "name": "subject",
+              "value": "={{ 'We received your message (' + $('Log Ticket in Ledger').item.json.ticket_number + ')' }}",
+              "type": "string"
+            },
+            {
+              "id": "ho-body",
+              "name": "message_body",
+              "value": "Hi there,\n\nThanks for getting in touch. A member of our team will read your message and reply personally.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
     }
   ],
   "connections": {
@@ -786,6 +1020,60 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Order Found?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Human Handoff in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Found?": {
+      "main": [
+        [
+          {
+            "node": "Log Status Reply in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Human Handoff in Ticket Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Status Reply in Ticket Ledger": {
+      "main": [
+        [
+          {
+            "node": "Format Status Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Human Handoff in Ticket Ledger": {
+      "main": [
+        [
+          {
+            "node": "Format Handoff Notice",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     }
@@ -794,7 +1082,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": true,
-    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-"
+    "errorWorkflow": "WORKFLOW_ID_ent-03-global-error-handler-dead-letter-queue-dl"
   },
   "active": false
 }
