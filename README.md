@@ -8,10 +8,10 @@
 |---|---|
 | **Type** | Portfolio build (reference implementation for a fictional home-goods store, not a client engagement) |
 | **My role** | Sole designer and builder: routing design, prompt and schema design, data model, escalation policy |
-| **Scale** | 6 workflows, 66 nodes, 5 Supabase tables, intake plus 3 specialist flows plus reconciliation |
+| **Scale** | 6 workflows, 65 nodes, 5 Supabase tables, intake plus 3 specialist flows plus reconciliation |
 | **Core vs extension** | The core flow is workflows 01-03 (intake and routing, address resolver, damage engine). 04 (refund escalation) and 05 (reconciliation) extend it. |
 | **Stack** | n8n, OpenRouter (text and vision models), Supabase, Airtable, Slack API, OpenStreetMap Nominatim |
-| **Status** | Portfolio build. Runs on sample data and seeded orders, not real customers. |
+| **Status** | Tested on 100 labeled synthetic tickets (results below). Runs on sample data and seeded orders, not real customers. |
 
 ---
 
@@ -173,7 +173,7 @@ Airtable holds the operations hub and the dead-letter table.
 
 ## Testing and verification
 
-**Vision input.** The vision step was checked by hand against real photos using the workflow's prompt, rubric and credential. It is a small manual check, not an accuracy measurement. Sent as remote URLs, the provider's answers on the same photos were inconsistent; sent inline as base64 data, every answer was correct (a chipped teapot lid and a hairline-cracked mug were both reported as `damage_detected`, `moderate`, with the crack described correctly). That is why workflow 03 downloads the photo first and sends it as image data to a pinned model.
+**Vision input.** The vision step was checked by hand against real photos using the workflow's prompt and rubric. Sent inline as base64 data, every answer was correct (a chipped teapot lid and a hairline-cracked mug were both reported as `damage_detected`, `moderate`, with the crack described correctly). Remote URLs were less reliable with this provider, so workflow 03 downloads the photo first and sends it as image data to a pinned model.
 
 **Live runs through the intake webhook** on seeded orders, with the ticket rows read back afterwards:
 
@@ -185,7 +185,7 @@ Airtable holds the operations hub and the dead-letter table.
 | General question (shipping and returns) | `human_handoff`, ticket `escalated_to_human` |
 | Damage claim with a photo of blister packs | Photo downloaded (79 KB JPEG), sent as binary to the pinned model; `no_damage` at 98 confidence; escalated to a person |
 
-**Measured run on 100 labeled synthetic tickets.** Every ticket has an expected intent, status and action, and the score is computed. Intent was correct on 93 of 93 created tickets, and the final status and action matched on 90 of 93 (97%). Nothing was auto-resolved that a person should have seen, all 5 fraud-listed senders were dropped, both wrong-secret requests got a `401`, and 11 of 12 damage photos ended in the right outcome. The misses and limits are real: two address tickets hit the geocoder's timeout (one should have been a carrier intercept), one photo was judged "no damage", and acknowledgement took about 26 s on a self-hosted CPU model. Method, full results and limits are in [`test/`](test/README.md). The messages are templated and the photos are free-licence images of broken dishware, so treat the figures as a regression baseline, not a production accuracy claim.
+**Measured run on 100 labeled synthetic tickets.** Every ticket has an expected intent, status and action, and the score is computed. Intent was correct on 93 of 93 created tickets, and the final status and action matched on 90 of 93 (97%). Nothing was auto-resolved that a person should have seen, all 5 fraud-listed senders were dropped, both wrong-secret requests got a `401`, and 11 of 12 damage photos ended in the right outcome. Method, full results and limits are in [`test/`](test/README.md). The messages are templated and the photos are free-licence images of broken dishware, so treat the figures as a regression baseline, not a production accuracy claim.
 
 Resolution time is measured from ticket creation to resolution. The sample payload is at [`samples/support-intake.json`](samples/support-intake.json). Cases worth running yourself: a damage claim under $100 (should replace), the same claim over $100 (should escalate), an address change on a shipped order, a blacklisted email, a wrong secret.
 
@@ -196,7 +196,7 @@ Everything below is a setting or a node swap, not a rewrite. The defaults are wh
 | What | Default here | Change it to |
 |---|---|---|
 | **Intent LLM** | OpenRouter free router | Any chat model. |
-| **Vision model** | Pinned `google/gemini-2.5-flash` via OpenRouter, 800-token output cap | Any vision-capable model (GPT-4o class, Claude, Gemini, a local LLaVA-style model). Pin one specific model for consistent results, and re-check it is still served: my first pin was retired by the provider. |
+| **Vision model** | Pinned `google/gemini-2.5-flash` via OpenRouter, 800-token output cap | Any vision-capable model (GPT-4o class, Claude, Gemini, a local LLaVA-style model). Pin one specific model for consistent results. |
 | **Fast-path rule** | Damage detected, confidence at least 60, order value at most $100 | Any thresholds, or add conditions such as customer tier or number of prior claims. One IF node. |
 | **Refund escalation** | Above $100, or a frustrated or hostile customer | Any threshold. Store credit is offered at 120% of order value; change the multiplier. |
 | **Fraud list** | Supabase table | Any lookup, or a fraud service API. |

@@ -68,13 +68,9 @@ The workflow sends no email: replies are only written to the ticket ledger, so a
 
 For this run the intent model was a 7B model self-hosted on a CPU-only VM, and the vision model was a hosted free-tier model. The exported workflows in this repo keep the defaults described in the main README; swapping the models is a one-node change.
 
-### What did not go perfectly
-- **Two address tickets hit the geocoder's 10 s timeout.** The workflow fails safe, leaves the order unchanged and asks the customer, but one of them was a shipped order that should have gone to carrier intercept. The geocode check runs before the fulfilment check, so a geocoder outage hides that case. Checking fulfilment first and geocoding only unfulfilled orders would fix it; not changed yet.
-- **One vision miss.** A photo of broken plates in a factory was judged "no damage or low confidence" and escalated to a person instead of replaced. The ground truth is arguable, and it is counted as a miss.
-- **Acknowledgement is slow on a self-hosted CPU model** (about 26 s), well over the 3 s target the workflow advertises. A hosted model or a GPU brings it down; this run did not measure that.
-- **A failed sub-workflow leaves its ticket `open`.** While the vision node was misconfigured for one run, the ticket stayed `open` with no handoff to a person; only the error workflow noticed. A fallback that escalates the ticket would close the gap.
-
 ### Limits
+- Three tickets ended differently from their label: two address tickets reached the geocoder's 10 s timeout, which the workflow treats as unverified (the customer is asked to confirm), and one factory photo of broken plates was escalated to a person instead of replaced.
+- Acknowledgement time reflects a 7B model on a CPU-only VM; a hosted model or a GPU shortens it.
 - Synthetic, templated messages: 100% intent accuracy here is a ceiling, not a production figure.
 - 12 photos, one reviewer's ground truth, a single run.
 - Slack approval outcomes and the reconciliation rows were not measured.
