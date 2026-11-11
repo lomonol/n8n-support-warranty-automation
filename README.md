@@ -35,42 +35,42 @@ The goal is not to remove humans. It is to make sure **people only spend time on
 
 ```mermaid
 flowchart TD
-  A[POST /support-intake] --> B{Secret header valid?}
-  B -- no --> X[401]
-  B -- yes --> N[Normalize payload: channel, email, order number, message, attachments]
-  N --> C{Email on fraud blacklist?}
-  C -- yes --> D[Drop quietly, 200 OK]
-  C -- no --> P[Look up customer + order]
-  P --> L[LLM: intent, sentiment, urgency<br/>typed output]
-  L --> T[(Create ticket in ledger)]
-  T --> ACK[200 acknowledged]
-  ACK --> R{Route by intent}
+  A["POST /support-intake"] --> B{"Secret header valid?"}
+  B -- no --> X["401"]
+  B -- yes --> N["Normalize payload: channel, email, order number, message, attachments"]
+  N --> C{"Email on fraud blacklist?"}
+  C -- yes --> D["Drop quietly, 200 OK"]
+  C -- no --> P["Look up customer + order"]
+  P --> L["LLM: intent, sentiment, urgency<br/>typed output"]
+  L --> T[("Create ticket in ledger")]
+  T --> ACK["200 acknowledged"]
+  ACK --> R{"Route by intent"}
   R -- address update --> W2
   R -- damaged item --> W3
   R -- refund --> W4
-  R -- order status --> OS{Order found?}
-  OS -- yes --> SR[Status reply from order record, auto_resolved]
+  R -- order status --> OS{"Order found?"}
+  OS -- yes --> SR["Status reply from order record, auto_resolved"]
   OS -- no --> HO
-  R -- anything else --> HO[Human handoff, escalated_to_human]
-  subgraph W2[02 Address resolver]
-    G[Geocode proposed address] --> GM{Geocode matched?}
-    GM -- no --> AU[Order unchanged, ask customer, awaiting_customer]
-    GM -- yes --> F{Order unfulfilled?}
-    F -- yes --> U[Update order address, ticket auto_resolved]
-    F -- no --> I[Flag carrier intercept, escalated_to_human]
+  R -- anything else --> HO["Human handoff, escalated_to_human"]
+  subgraph W2["02 Address resolver"]
+    G["Geocode proposed address"] --> GM{"Geocode matched?"}
+    GM -- no --> AU["Order unchanged, ask customer, awaiting_customer"]
+    GM -- yes --> F{"Order unfulfilled?"}
+    F -- yes --> U["Update order address, ticket auto_resolved"]
+    F -- no --> I["Flag carrier intercept, escalated_to_human"]
   end
-  subgraph W3[03 Vision damage engine]
-    HP{Photo supplied?} -- no --> ES
-    HP -- yes --> DL[Download photo as binary] --> V[Vision model inspects photo]
-    V --> E{Damage AND confidence >= 60<br/>AND order <= $100}
-    E -- yes --> RO[Create replacement order -R1<br/>record claim, auto_resolved]
-    E -- no --> ES[escalated_to_human]
+  subgraph W3["03 Vision damage engine"]
+    HP{"Photo supplied?"} -- no --> ES
+    HP -- yes --> DL["Download photo as binary"] --> V["Vision model inspects photo"]
+    V --> E{"Damage AND confidence >= 60<br/>AND order <= $100"}
+    E -- yes --> RO["Create replacement order -R1<br/>record claim, auto_resolved"]
+    E -- no --> ES["escalated_to_human"]
   end
-  subgraph W4[04 Refund escalation]
-    H[Evaluate threshold and options] --> SL[Slack approval card] --> LG[(Ledger)]
+  subgraph W4["04 Refund escalation"]
+    H["Evaluate threshold and options"] --> SL["Slack approval card"] --> LG[("Ledger")]
   end
-  U & RO --> W5[05 Reconciliation + CSAT follow-up]
-  Z[Any failure] -.-> DLQ[Error workflow: DLQ + alert]
+  U & RO --> W5["05 Reconciliation + CSAT follow-up"]
+  Z["Any failure"] -.-> DLQ["Error workflow: DLQ + alert"]
 ```
 
 ### Stage by stage
@@ -173,9 +173,32 @@ Airtable holds the operations hub and the dead-letter table.
 
 ## Testing and verification
 
-**Vision input.** The vision step was checked by hand against real photos using the workflow's prompt and rubric. Sent inline as base64 data, every answer was correct (a chipped teapot lid and a hairline-cracked mug were both reported as `damage_detected`, `moderate`, with the crack described correctly). Remote URLs were less reliable with this provider, so workflow 03 downloads the photo first and sends it as image data to a pinned model.
+**How it was tested.** 100 labeled synthetic tickets were sent to the live intake webhook, paced, with no retries: 32 order status (including unknown orders, hostile characters, Spanish and a duplicate pair), 15 address changes (unfulfilled, shipped and unverifiable), 14 damage claims, 12 refunds, 20 general questions and 14 edge cases (including 5 fraud-listed senders and 2 wrong-secret requests). Each ticket carries its expected intent, final status and action, and the score is computed from the ticket ledger, not eyeballed. The intent model was a 7B model self-hosted on a CPU-only VM; the vision model was a hosted free-tier model. Single run. The harness, seed data and scorer are in [`test/`](test/README.md).
 
-**Live runs through the intake webhook** on seeded orders, with the ticket rows read back afterwards:
+| Measure | Result |
+|---|---|
+| Tickets created (fraud-listed and wrong-secret requests create none) | 93 of 100 |
+| Intent classified correctly | 93 of 93 |
+| Final status and action match the label | 90 of 93 (97%) |
+| Auto-resolved when a person was expected | 0 |
+| Damage-photo outcome correct | 11 of 12 (7 of 8 clear damage replaced, 2 of 2 high-value escalated, 2 of 2 intact escalated) |
+| Fraud-listed senders dropped with no ticket | 5 of 5 |
+| Wrong secret rejected with `401` | 2 of 2 |
+| Quote and SQL-style inputs handled | 3 of 3 |
+| Acknowledgement (classify and record the ticket) | median 25.9 s, 90th percentile 29.6 s, max 49.7 s |
+| Ticket creation to resolution, 45 auto-resolved runs | median 0 s, 90th percentile 6 s, max 7 s (the longer runs are vision replacements) |
+
+### What did not go perfectly
+
+- **Acknowledgement is slow on CPU.** About 26 s per ticket, because the caller waits for classification on a 7B model running on a CPU-only VM. A hosted model or a GPU brings it down; the first call after the VM was idle needed a client timeout above 90 s.
+- **Two address tickets hit the geocoder timeout.** The free OpenStreetMap geocoder did not answer within 10 s, and the workflow treats that as unverified: the order is left unchanged and the customer is asked to confirm. One of the two was a shipped order that should have become a carrier intercept, because the geocode check runs before the fulfilment check. Checking fulfilment first would route shipped orders correctly even when the geocoder is down.
+- **One damage photo escalated instead of replaced.** The vision model judged a factory photo of broken plates as no damage or low confidence. The miss errs toward a person, not a payout.
+- **Duplicates are not merged.** The same message sent twice created two tickets; the workflow does not deduplicate.
+- **Scope.** Messages are templated, so 93 of 93 intent is a ceiling, not production accuracy. 12 photos, free-licence images of broken dishware rather than the store's products, one reviewer's ground truth. Slack approval outcomes and reconciliation rows were not measured, and replies are prepared and logged, not sent.
+
+**Hand checks before the measured run.** The vision step was checked by hand against real photos using the workflow's prompt and rubric. Sent inline as base64 data, every answer was correct (a chipped teapot lid and a hairline-cracked mug were both reported as `damage_detected`, `moderate`, with the crack described correctly). Remote URLs were less reliable with this provider, so workflow 03 downloads the photo first and sends it as image data to a pinned model.
+
+Live runs through the intake webhook on seeded orders, with the ticket rows read back afterwards:
 
 | Case | Result |
 |---|---|
@@ -184,8 +207,6 @@ Airtable holds the operations hub and the dead-letter table.
 | Damage claim with no photo | `escalated_for_human_review`, reason "no photo supplied" |
 | General question (shipping and returns) | `human_handoff`, ticket `escalated_to_human` |
 | Damage claim with a photo of blister packs | Photo downloaded (79 KB JPEG), sent as binary to the pinned model; `no_damage` at 98 confidence; escalated to a person |
-
-**Measured run on 100 labeled synthetic tickets.** Every ticket has an expected intent, status and action, and the score is computed. Intent was correct on 93 of 93 created tickets, and the final status and action matched on 90 of 93 (97%). Nothing was auto-resolved that a person should have seen, all 5 fraud-listed senders were dropped, both wrong-secret requests got a `401`, and 11 of 12 damage photos ended in the right outcome. Method, full results and limits are in [`test/`](test/README.md). The messages are templated and the photos are free-licence images of broken dishware, so treat the figures as a regression baseline, not a production accuracy claim.
 
 Resolution time is measured from ticket creation to resolution. The sample payload is at [`samples/support-intake.json`](samples/support-intake.json). Cases worth running yourself: a damage claim under $100 (should replace), the same claim over $100 (should escalate), an address change on a shipped order, a blacklisted email, a wrong secret.
 
@@ -206,11 +227,11 @@ Everything below is a setting or a node swap, not a rewrite. The defaults are wh
 | **Store, products and notice text** | Fictional home-goods brand | Your own brand, policies and wording. |
 | **Intents** | Five | Add intents and routes (for example subscription changes). |
 
-## What this demonstrates
+## Skills used
 
 - **Policy-as-logic around an LLM**: explicit thresholds govern anything that moves money.
 - **Multi-modal AI** used as an evidence source, with a typed schema, confidence scoring and a hands-on test of where it fails.
-- **Defensive intake design**: authentication, fraud screening, early acknowledgement.
+- **Defensive intake design**: authentication, fraud screening, and an acknowledgement only once the ticket is recorded.
 - **Modular orchestration** across a relational ledger, geocoding, chat approvals and an operations hub.
 - **Auditability**: a ticket ledger recording what the system did and why.
 
@@ -230,7 +251,7 @@ Everything below is a setting or a node swap, not a rewrite. The defaults are wh
 ### Run it yourself
 1. Import the six workflows into n8n. All are exported **inactive**.
 2. Replace every placeholder (`REPLACE_ME`, `YOUR_*`, `WORKFLOW_ID_*`), re-select credentials, and re-link the Execute Workflow nodes and the Error workflow setting to your imported copies.
-3. Create the five Supabase tables, then run [`sql/ticket-number-sequence.sql`](sql/ticket-number-sequence.sql) for sequential ticket numbers. Create the Airtable operations hub, and a Header Auth credential for the Slack bot token (`Authorization: Bearer ...`). Add an interactions-router workflow that handles the Slack button actions (`lumina_refund_full`, `lumina_credit_120`); this repo posts the approval card, and the click is handled outside it.
+3. Create the five Supabase tables, then run [`sql/ticket-number-sequence.sql`](sql/ticket-number-sequence.sql) for sequential ticket numbers. Create the Airtable operations hub, and a Header Auth credential for the Slack bot token (`Authorization: Bearer ...`). Add an interactions-router workflow that handles the two Slack button actions defined in workflow 04 (full refund and 120% store credit); this repo posts the approval card, and the click is handled outside it.
 4. Edit the sample so `attachments` holds a public image URL (the placeholder in it does not resolve), then send it:
 
    ```bash

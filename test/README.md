@@ -63,13 +63,13 @@ The workflow sends no email: replies are only written to the ticket ledger, so a
 | Fraud-listed senders dropped with no ticket | 5 of 5 |
 | Wrong secret rejected with 401 | 2 of 2 |
 | Quote and SQL-style inputs handled | 3 of 3 |
-| Acknowledgement time (classify and log ticket) | median 25.9 s, 90th percentile 29.6 s |
+| Acknowledgement time (classify and log ticket) | median 25.9 s, 90th percentile 29.6 s, max 49.7 s |
 | Ticket creation to resolution, auto-resolved runs | median 0 s, 90th percentile 6 s, max 7 s (the longer ones are vision replacements) |
 
 For this run the intent model was a 7B model self-hosted on a CPU-only VM, and the vision model was a hosted free-tier model. The exported workflows in this repo keep the defaults described in the main README; swapping the models is a one-node change.
 
 ### Limits
-- Three tickets ended differently from their label: two address tickets reached the geocoder's 10 s timeout, which the workflow treats as unverified (the customer is asked to confirm), and one factory photo of broken plates was escalated to a person instead of replaced.
+- Three tickets ended differently from their label: two address tickets reached the geocoder's 10 s timeout, which the workflow treats as unverified (the customer is asked to confirm), and one factory photo of broken plates was escalated to a person instead of replaced. One of the two address tickets was a shipped order that should have become a carrier intercept: the geocode check runs before the fulfilment check, so a geocoder timeout hides it.
 - Acknowledgement time reflects a 7B model on a CPU-only VM; a hosted model or a GPU shortens it.
 - Synthetic, templated messages: 100% intent accuracy here is a ceiling, not a production figure.
 - 12 photos, one reviewer's ground truth, a single run.
