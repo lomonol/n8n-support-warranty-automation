@@ -12,6 +12,7 @@
 | **Core vs extension** | The core flow is workflows 01-03 (intake and routing, address resolver, damage engine). 04 (refund escalation) and 05 (reconciliation) extend it. |
 | **Stack** | n8n, OpenRouter (text and vision models), Supabase, Airtable, Slack API, OpenStreetMap Nominatim |
 | **Status** | Tested on 100 labeled synthetic tickets (results below). Runs on sample data and seeded orders, not real customers. |
+| **Results** | On 100 synthetic tickets: 90 of 93 ended in the correct outcome, 0 auto-resolved that needed a person, 11 of 12 damage photos handled correctly |
 
 ---
 
