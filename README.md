@@ -13,8 +13,6 @@
 | **Stack** | n8n, OpenRouter (text and vision models), Supabase, Airtable, Slack API, OpenStreetMap Nominatim |
 | **Status** | Portfolio build. Runs on sample data and seeded orders, not real customers. |
 
-> **If you only read one section:** [Why this is interesting](#why-this-is-interesting).
-
 ---
 
 ## The problem
@@ -30,13 +28,6 @@ The goal is not to remove humans. It is to make sure **people only spend time on
 - **Damage claims** are inspected by a vision model. Clear, low-value cases get an automatic replacement order; everything else is escalated with the evidence attached.
 - **Refunds over a threshold** go to a Slack approval card with options, and nothing is paid out until a person clicks.
 - Every action is written to a **ticket ledger**, then reconciled into an operations view.
-
-## Why this is interesting
-
-1. **The auto-approve rule is three explicit conditions, not a vibe.** Replace automatically only if damage is detected *and* confidence is at least 60 *and* order value is at most $100. See [the fast path](#the-fast-path-is-a-policy-not-a-prompt).
-2. **Fraud is checked before the system spends anything.** A blacklisted customer is dropped with a quiet `200` before any lookup or LLM call.
-3. **One front door, specialist back rooms.** Intent classification routes to separate workflows, so each can be tested and changed in isolation.
-4. **A ledger records every decision**, which is what makes an automated system auditable to a finance or support lead.
 
 ---
 
