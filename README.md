@@ -27,7 +27,7 @@ The goal is not to remove humans. It is to make sure **people only spend time on
 - Every inquiry is authenticated, screened against a fraud list, matched to the customer and order, classified by intent and sentiment, and logged as a ticket, before a person sees it.
 - **Address changes** on unfulfilled orders are applied automatically; shipped orders are flagged for a carrier intercept instead.
 - **Damage claims** are inspected by a vision model. Clear, low-value cases get an automatic replacement order; everything else is escalated with the evidence attached.
-- **Refunds over a threshold** go to a Slack approval card with options, and nothing is paid out until a person clicks.
+- **Every refund request** goes to a Slack approval card that states the reason (over $100, or a frustrated or hostile customer) and offers options; nothing is paid out until a person clicks.
 - Every action is written to a **ticket ledger**, then reconciled into an operations view.
 
 ---
@@ -81,7 +81,7 @@ flowchart TD
 | 01 | **Intake and LTV matcher** | Validates a secret header, normalises the payload (channel, email, order number found in the message if not supplied, attachment flag), checks the fraud blacklist, loads customer and order, classifies intent and sentiment, writes a ticket (the number comes from a database sequence), acknowledges, routes. Order-status questions get a reply built from the order record; everything with no automated handler is handed to a person. | Cheap, deterministic checks run first; the LLM runs only for legitimate traffic. |
 | 02 | **Address resolver** | Builds the proposed address from the customer's correction and geocodes it through Nominatim (city, state and ZIP only, not the street). A failed or empty match leaves the order unchanged and asks the customer to confirm; otherwise it branches on fulfilment status. | Changing an address on a shipped order is not an edit, it is a carrier problem, so the workflow treats the two cases differently. |
 | 03 | **Vision damage engine** | Escalates straight away if there is no photo; otherwise downloads the photo, sends it to a pinned vision model as image data, and gets typed findings against a severity rubric. A three-part rule decides replace or escalate. | Only unambiguous, cheap cases are automated; ambiguity is a human's job. |
-| 04 | **High-value escalation** | Computes the reason for escalation and the options (including store credit at 120% of order value) and posts a Slack approval card. | Money decisions above a threshold need a named human. |
+| 04 | **High-value escalation** | Computes the reason for escalation and the options (including store credit at 120% of order value) and posts a Slack approval card. | Money decisions need a named human; the card says why this one needs attention. |
 | 05 | **Reconciliation** | Records resolution metrics (measured time from ticket creation to resolution) and a CSAT follow-up into an operations hub. | Automation needs a feedback loop or nobody knows whether it is working. |
 | - | **Error handler** | Logs failures to a dead-letter table and alerts DevOps. | Unattended systems must say when they break. |
 
@@ -220,7 +220,7 @@ Everything below is a setting or a node swap, not a rewrite. The defaults are wh
 | **Intent LLM** | OpenRouter free router | Any chat model. |
 | **Vision model** | Pinned `google/gemini-2.5-flash` via OpenRouter, 800-token output cap | Any vision-capable model (GPT-4o class, Claude, Gemini, a local LLaVA-style model). Pin one specific model for consistent results. |
 | **Fast-path rule** | Damage detected, confidence at least 60, order value at most $100 | Any thresholds, or add conditions such as customer tier or number of prior claims. One IF node. |
-| **Refund escalation** | Above $100, or a frustrated or hostile customer | Any threshold. Store credit is offered at 120% of order value; change the multiplier. |
+| **Refund card reason** | Over $100, or a frustrated or hostile customer (every refund gets a card) | Any threshold, or auto-approve small refunds with an IF node before the card. Store credit is offered at 120% of order value; change the multiplier. |
 | **Fraud list** | Supabase table | Any lookup, or a fraud service API. |
 | **Geocoder** | OpenStreetMap Nominatim | Google, Mapbox, Smarty, Loqate. |
 | **Database** | Supabase | Postgres, Airtable, MySQL. |
