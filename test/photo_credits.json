@@ -1,0 +1,62 @@
+{
+ "damaged_01": {
+  "file": "Broken Plate.jpg",
+  "licence": "CC BY-SA 3.0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_Plate.jpg"
+ },
+ "damaged_02": {
+  "file": "Broken Plate 2.jpg",
+  "licence": "CC BY-SA 3.0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_Plate_2.jpg"
+ },
+ "damaged_03": {
+  "file": "Broken cup (23942529439).jpg",
+  "licence": "CC BY-SA 2.0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_cup_(23942529439).jpg"
+ },
+ "damaged_04": {
+  "file": "Broken shot glass.jpg",
+  "licence": "CC BY-SA 3.0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_shot_glass.jpg"
+ },
+ "damaged_05": {
+  "file": "Broken drinking glass.JPG",
+  "licence": "CC BY 3.0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_drinking_glass.JPG"
+ },
+ "damaged_06": {
+  "file": "A cracked plate after inadvertently putting small pieces of metal into the microwave.jpg",
+  "licence": "CC BY-SA 4.0",
+  "page": "https://commons.wikimedia.org/wiki/File:A_cracked_plate_after_inadvertently_putting_small_pieces_of_metal_into_the_microwave.jpg"
+ },
+ "damaged_07": {
+  "file": "A cracked plate after inadvertently putting small pieces of metal into the microwave (1).jpg",
+  "licence": "CC BY-SA 4.0",
+  "page": "https://commons.wikimedia.org/wiki/File:A_cracked_plate_after_inadvertently_putting_small_pieces_of_metal_into_the_microwave_(1).jpg"
+ },
+ "damaged_08": {
+  "file": "Broken ceramic plates in Claytan Factory.jpg",
+  "licence": "CC0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_ceramic_plates_in_Claytan_Factory.jpg"
+ },
+ "damaged_hv_01": {
+  "file": "Broken plates 1 2022-03-25.jpeg",
+  "licence": "CC BY-SA 4.0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_plates_1_2022-03-25.jpeg"
+ },
+ "damaged_hv_02": {
+  "file": "Broken glass through thermal shock - 1st of 3.jpg",
+  "licence": "CC BY 4.0",
+  "page": "https://commons.wikimedia.org/wiki/File:Broken_glass_through_thermal_shock_-_1st_of_3.jpg"
+ },
+ "intact_01": {
+  "file": "Ceramic floor vase from Maragogipe, State of Bahia, Brazil.JPG",
+  "licence": "CC0",
+  "page": "https://commons.wikimedia.org/wiki/File:Ceramic_floor_vase_from_Maragogipe,_State_of_Bahia,_Brazil.JPG"
+ },
+ "intact_02": {
+  "file": "QN ceramic vase with water.jpg",
+  "licence": "CC BY 2.0",
+  "page": "https://commons.wikimedia.org/wiki/File:QN_ceramic_vase_with_water.jpg"
+ }
+}

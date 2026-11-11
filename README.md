@@ -185,6 +185,8 @@ Airtable holds the operations hub and the dead-letter table.
 | General question (shipping and returns) | `human_handoff`, ticket `escalated_to_human` |
 | Damage claim with a photo of blister packs | Photo downloaded (79 KB JPEG), sent as binary to the pinned model; `no_damage` at 98 confidence; escalated to a person |
 
+**Measured run on 100 labeled synthetic tickets.** Every ticket has an expected intent, status and action, and the score is computed. Intent was correct on 93 of 93 created tickets, and the final status and action matched on 90 of 93 (97%). Nothing was auto-resolved that a person should have seen, all 5 fraud-listed senders were dropped, both wrong-secret requests got a `401`, and 11 of 12 damage photos ended in the right outcome. The misses and limits are real: two address tickets hit the geocoder's timeout (one should have been a carrier intercept), one photo was judged "no damage", and acknowledgement took about 26 s on a self-hosted CPU model. Method, full results and limits are in [`test/`](test/README.md). The messages are templated and the photos are free-licence images of broken dishware, so treat the figures as a regression baseline, not a production accuracy claim.
+
 Resolution time is measured from ticket creation to resolution. The sample payload is at [`samples/support-intake.json`](samples/support-intake.json). Cases worth running yourself: a damage claim under $100 (should replace), the same claim over $100 (should escalate), an address change on a shipped order, a blacklisted email, a wrong secret.
 
 ## Configuration and swap-ins
