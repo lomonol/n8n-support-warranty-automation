@@ -1,4 +1,4 @@
-# Case Study: Omnichannel Customer Operations Automation
+# Case Study: Customer Support and Warranty Automation
 
 **An e-commerce support back office as chained n8n workflows: it screens fraud, understands what each customer wants, fixes addresses, judges damage claims from photos, and sends only the expensive decisions to a human.**
 
